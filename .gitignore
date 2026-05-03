@@ -24,3 +24,16 @@ dist-ssr
 *.sw?
 .env
 credentials.json
+# Pastas pesadas do React e Python
+node_modules/
+venv/
+env/
+__pycache__/
+
+# Banco de dados da Inteligência Artificial
+chroma_db/
+*.sqlite3
+*.db
+
+# Chaves secretas
+.env

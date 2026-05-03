@@ -159,7 +159,7 @@ export default function EstrategiasPedagogicas() {
     try {
       // --- A MUDANÇA ESTÁ AQUI ---
       // Decide automaticamente qual backend usar
-      const API_URL = "http://localhost:8000/gerar-plano"; // URL do backend Python (ajuste conforme necessário)
+      const API_URL = "https://ensinodefisica.onrender.com"; // URL do backend Python (ajuste conforme necessário)
 
       console.log("Enviando requisição para:", API_URL); // Isso ajuda a debugar no console (F12)
 
