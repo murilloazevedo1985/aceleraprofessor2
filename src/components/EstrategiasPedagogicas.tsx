@@ -159,11 +159,15 @@ export default function EstrategiasPedagogicas() {
     try {
       // --- A MUDANÇA ESTÁ AQUI ---
       // Decide automaticamente qual backend usar
-      const API_URL = "https://ensinodefisica.onrender.com"; // URL do backend Python (ajuste conforme necessário)
+      const API_URL = "https://ensinodefisica.onrender.com/gerar-plano"
+      // Pega a URL da API do ambiente ou usa um valor padrão para desenvolvimento.
+      // Isso torna o código mais flexível entre o ambiente local e o de produção.
+      const API_URL = process.env.REACT_APP_API_URL || "http://127.0.0.1:8000";
 
       console.log("Enviando requisição para:", API_URL); // Isso ajuda a debugar no console (F12)
 
       const resposta = await fetch(API_URL, {
+      const resposta = await fetch(`${API_URL}/gerar-plano`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(dadosParaOBackend)
