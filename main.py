@@ -42,7 +42,7 @@ cliente_chroma = chromadb.PersistentClient(path="./meu_banco_vetorial")
 funcao_gemini = GeminiEmbeddingFunction()
 
 try:
-    colecao = cliente_chroma.get_collection(
+    colecao = cliente_chroma.get_or_create_collection(
         name="aulas_fisica",
         embedding_function=funcao_gemini
     )
