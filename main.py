@@ -7,6 +7,7 @@ from chromadb.api.types import Documents, EmbeddingFunction, Embeddings
 import json
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from construir_banco import construir_banco
 
 app = FastAPI()
 
@@ -162,6 +163,15 @@ Nesse caso, você deve retornar APENAS o seguinte JSON exato e nada mais:
         if "youtubeVideo" in plano_json:
             plano_json["youtubeVideo"]["link"] = ""
             
+@app.get("/atualizar-materiais")
+async def atualizar():
+    try:
+        print("🚀 Iniciando sincronização com o Google Drive...")
+        construir_banco()
+        return {"status": "sucesso", "mensagem": "O banco de dados foi atualizado com os materiais do Drive!"}
+    except Exception as e:
+        return {"status": "erro", "detalhes": str(e)}
+
         print("✅ Plano gerado e enviado ao React!")
         return plano_json
 
