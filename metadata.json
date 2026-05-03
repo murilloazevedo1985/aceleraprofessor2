@@ -1,0 +1,7 @@
+{
+  "name": "Acelera Professor",
+  "description": "An AI-powered workflow assistant for Physics teachers to generate tailored class activity plans based on available resources and student demographics.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
