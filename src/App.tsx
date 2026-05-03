@@ -23,7 +23,7 @@ export default function App({ onVoltar }: CompetenceAssessmentProps) {
           onClick={() => setCurrentMenu('home')}
         >
           <Rocket className="w-8 h-8 text-indigo-400" />
-          <h1 className="text-xl font-bold tracking-wide">acelera Professor</h1>
+          <h1 className="text-xl font-bold tracking-wide">Acelera Professor</h1>
         </div>
         
         {/* Menu superior (só aparece se não estiver na Home) */}
