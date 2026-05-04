@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { BookOpen, Sparkles, CheckSquare, Layers, Wrench, MonitorPlay, Users, Upload, FileText, Clock, Target, ClipboardList, Lightbulb, PlayCircle, Smartphone, Video, FileCheck, Loader2, Printer } from 'lucide-react';
 import 'katex/dist/katex.min.css';
+import Latex from 'react-latex-next';
 
 // IMPORTAÇÕES CORRIGIDAS
 import { MenuTemas } from './MenuTemas';

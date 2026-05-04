@@ -113,8 +113,8 @@ async def gerar_plano(dados: PlanoRequest):
         - TURMA: {dados.turma}
         - RECURSOS: {", ".join(dados.recursos)}
 
-        Retorne o plano no formato JSON com as chaves: title, methodology, duration, learningObjectives, requiredMaterials, steps, suggestedApp, youtubeVideo.
-        Use LaTeX com barras duplas (\\) para fórmulas.
+        Retorne o plano no formato JSON.
+        Regra CRÍTICA de formatação: Para TODAS as fórmulas LaTeX, use barras duplas (por exemplo: "v_m = \\\\frac{\\\\Delta s}{\\\\Delta t}").
         """
 
         print("🧠 IA gerando plano final...")
