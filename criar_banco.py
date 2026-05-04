@@ -1,8 +1,8 @@
+
 import os
 import io
 import time
-import chromadb
-from chromadb.api.types import Documents, EmbeddingFunction, Embeddings
+from pinecone import Pinecone # Adeus ChromaDB, Olá Pinecone!
 import google.generativeai as genai
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
@@ -13,40 +13,15 @@ from PIL import Image
 import pytesseract
 
 # --- 1. CONFIGURAÇÕES E CREDENCIAIS ---
-CHAVE_API_GEMINI = "AIzaSyCnOZAYx_zjnFq1FkmanKZ4j0Ibw93n7Bc"
+CHAVE_API_GEMINI =  "AIzaSyCnOZAYx_zjnFq1FkmanKZ4j0Ibw93n7Bc"
+CHAVE_API_PINECONE = "pcsk_45MtAp_L8EKvhxjmroEujy1QDQ2xjHmvu8H17ZHnM8Pe6w68HVnyFGkeTqMjBnXzgVHUPu" # Cole a chave que você pegou no site
+NOME_INDEX_PINECONE = "aulas-fisica"
 ID_PASTA_TESTE_DRIVE = "1jZztziuVQ8e7jJqeBAUXiNP2XQT6fcCJ"
 CAMINHO_JSON_CREDENCIAIS = "credenciais.json"
 
 genai.configure(api_key=CHAVE_API_GEMINI)
 
-# --- 2. CONFIGURAR O BANCO DE DADOS VETORIAL (CHROMADB) ---
-# O ChromaDB precisa de uma função para transformar texto em números (vetores).
-# Vamos usar o modelo de Embeddings do Gemini (ótimo para português).
-class GeminiEmbeddingFunction(EmbeddingFunction):
-    def __call__(self, input: Documents) -> Embeddings:
-        embeddings = []
-        for text in input:
-            resposta = genai.embed_content(
-                model="models/gemini-embedding-2", # Modelo de embedding mais recente e recomendado
-                content=text,
-                task_type="retrieval_document"
-            )
-            embeddings.append(resposta['embedding'])
-            # Uma pequena pausa para não estourar o limite gratuito da API do Google
-            time.sleep(1) 
-        return embeddings
-print("⚙️ Inicializando Banco de Dados Local...")
-# Isso vai criar uma pasta chamada "meu_banco_vetorial" no seu projeto
-cliente_chroma = chromadb.PersistentClient(path="./meu_banco_vetorial")
-funcao_gemini = GeminiEmbeddingFunction()
-
-# Cria (ou carrega se já existir) a nossa "prateleira" de arquivos
-colecao = cliente_chroma.get_or_create_collection(
-    name="aulas_fisica",
-    embedding_function=funcao_gemini
-)
-
-# --- 3. CONEXÃO COM O DRIVE ---
+# --- 2. CONEXÃO COM O DRIVE (Permanece igual) ---
 try:
     creds = service_account.Credentials.from_service_account_file(
         CAMINHO_JSON_CREDENCIAIS,
@@ -74,16 +49,18 @@ def obter_todos_arquivos_da_hierarquia(folder_id):
         print(f"⚠️ Erro ao listar pasta: {e}")
         return []
 
-# --- 4. FUNÇÃO DE FATIAR O TEXTO (CHUNKING) ---
-# A IA não consegue ler um livro todo de uma vez, então cortamos em parágrafos.
 def quebrar_texto(texto, tamanho_pedaco=1000, sobreposicao=200):
     pedacos = []
     for i in range(0, len(texto), tamanho_pedaco - sobreposicao):
         pedacos.append(texto[i:i + tamanho_pedaco])
     return pedacos
 
-# --- 5. O MOTOR PRINCIPAL DE EXTRAÇÃO E INDEXAÇÃO ---
+# --- 3. O MOTOR DE EXTRAÇÃO E ENVIO PARA NUVEM ---
 def construir_banco():
+    print("⚙️ Conectando ao Banco de Dados Pinecone na Nuvem...")
+    pc = Pinecone(api_key=CHAVE_API_PINECONE)
+    index = pc.Index(NOME_INDEX_PINECONE)
+
     arquivos = obter_todos_arquivos_da_hierarquia(ID_PASTA_TESTE_DRIVE)
     print(f"🔎 Encontrados {len(arquivos)} arquivos para indexar.")
 
@@ -116,17 +93,29 @@ def construir_banco():
                 print(f"✂️ Fatiando texto de '{arq['name']}'...")
                 pedacos = quebrar_texto(conteudo_arquivo)
                 
-                # Prepara os dados para o ChromaDB
-                ids = [f"{arq['id']}_parte_{i}" for i in range(len(pedacos))]
-                metadados = [{"fonte": arq['name']} for _ in pedacos]
+                print(f"🧠 Transformando textos em vetores via Gemini e enviando para o Pinecone...")
+                vetores_para_pinecone = []
                 
-                print(f"🧠 Enviando {len(pedacos)} pedaços para a IA vetorizar e salvando no banco...")
-                colecao.add(
-                    documents=pedacos,
-                    metadatas=metadados,
-                    ids=ids
-                )
-                print(f"✅ Arquivo '{arq['name']}' salvo no banco com sucesso!")
+                for i, pedaco in enumerate(pedacos):
+                    # 1. O Gemini transforma o pedaço em 768 números
+                    resposta_emb = genai.embed_content(
+                        model="models/gemini-embedding-2", # Modelo de embedding mais recente e recomendado
+                        content=pedaco,
+                        task_type="retrieval_document"
+                    )
+                    
+                    # 2. Preparamos o pacote (ID + Números + Metadados com o texto original)
+                    vetores_para_pinecone.append({
+                        "id": f"{arq['id']}_parte_{i}",
+                        "values": resposta_emb['embedding'],
+                        "metadata": {"fonte": arq['name'], "texto": pedaco} 
+                    })
+                    time.sleep(1) # Pausa obrigatória para o Google não nos bloquear
+                
+                # 3. Envia o pacote todo para o Pinecone de uma vez
+                if vetores_para_pinecone:
+                    index.upsert(vectors=vetores_para_pinecone)
+                    print(f"✅ Arquivo '{arq['name']}' salvo na nuvem com sucesso!")
             else:
                 print(f"⚠️ Nenhum texto extraído de '{arq['name']}'.")
 
@@ -135,4 +124,4 @@ def construir_banco():
 
 if __name__ == "__main__":
     construir_banco()
-    print("\n🎉 BANCO DE DADOS CONSTRUÍDO COM SUCESSO!")
+    print("\n🎉 TODOS OS MATERIAIS FORAM ENVIADOS PARA A NUVEM COM SUCESSO!")

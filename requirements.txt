@@ -8,3 +8,4 @@ uvicorn
 pydantic
 duckduckgo-search
 chromadb
+pinecone

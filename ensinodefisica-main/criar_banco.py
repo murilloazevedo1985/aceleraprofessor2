@@ -27,7 +27,7 @@ class GeminiEmbeddingFunction(EmbeddingFunction):
         embeddings = []
         for text in input:
             resposta = genai.embed_content(
-                model="models/text-embedding-004", # Modelo de embedding mais recente e recomendado
+                model="text-multilingual-embedding-002", # Modelo de embedding mais recente e recomendado
                 content=text,
                 task_type="retrieval_document"
             )
