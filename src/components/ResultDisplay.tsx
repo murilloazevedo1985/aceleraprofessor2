@@ -50,7 +50,7 @@ const CodeBlock: React.FC<{ code: string; label?: string }> = ({ code, label }) 
 
 const LatexText: React.FC<{ text: string }> = ({ text }) => {
   if (!text) return null;
-  const parts = text.split(/(\$\$[\s\S]*?\$\$|\$.*?\$)/g);
+  const parts = text.split(/(\$\$[\s\S]*?\$\$|\$.*?\$|\\\(.*?\\\))/g);
   return (
     <span>
       {parts.map((part, i) => {
@@ -79,6 +79,24 @@ const LatexText: React.FC<{ text: string }> = ({ text }) => {
           } catch (e) { return <span key={i}>{part}</span>; }
         } else if (part.startsWith('$') && part.endsWith('$')) {
           const content = part.slice(1, -1);
+          try {
+            return (
+              <span 
+                key={i} 
+                dangerouslySetInnerHTML={{ 
+                  __html: katex.renderToString(content, { 
+                    displayMode: false, 
+                    throwOnError: false, 
+                    strict: () => "ignore", 
+                    trust: true 
+                  }) 
+                }} 
+              />
+            );
+          } catch (e) { return <span key={i}>{part}</span>; }
+        }
+        else if (part.startsWith('\\(') && part.endsWith('\\)')) {
+          const content = part.slice(2, -2);
           try {
             return (
               <span 
