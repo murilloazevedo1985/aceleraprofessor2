@@ -127,8 +127,12 @@ async def gerar_plano(dados: PlanoRequest):
         plano_json = json.loads(resposta.text)
         
         # Limpeza final de segurança
-        if "suggestedApp" in plano_json: plano_json["suggestedApp"]["link"] = ""
-        if "youtubeVideo" in plano_json: plano_json["youtubeVideo"]["link"] = ""
+        # Limpeza final de segurança (Agora blindada contra erros da IA)
+        if "suggestedApp" in plano_json and isinstance(plano_json["suggestedApp"], dict):
+            plano_json["suggestedApp"]["link"] = "" 
+            
+        if "youtubeVideo" in plano_json and isinstance(plano_json["youtubeVideo"], dict):
+            plano_json["youtubeVideo"]["link"] = ""
 
         print("✅ Tudo pronto! Enviando para o professor.")
         return plano_json
