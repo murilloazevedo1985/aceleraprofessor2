@@ -115,6 +115,26 @@ async def gerar_plano(dados: PlanoRequest):
 
         Retorne o plano no formato JSON.
         Regra CRÍTICA de formatação: Para TODAS as fórmulas LaTeX, use barras duplas (por exemplo: "v_m = \\\\frac{\\\\Delta s}{\\\\Delta t}").
+        Retorne o plano no formato JSON, seguindo EXATAMENTE a estrutura abaixo.
+        Preencha TODOS os campos, especialmente 'teacherRole' e 'studentRole' em cada passo.
+
+        Estrutura do JSON esperado:
+        {{
+          "title": "Título da Aula",
+          "methodology": "Metodologia Principal",
+          "duration": "Duração Total",
+          "learningObjectives": ["Objetivo 1", "Objetivo 2"],
+          "requiredMaterials": ["Material 1", "Material 2"],
+          "steps": [
+            {{
+              "time": "Tempo em min",
+              "title": "Título do Passo",
+              "description": "Descrição detalhada do passo.",
+              "teacherRole": "Ação específica do docente neste passo.",
+              "studentRole": "Ação específica do estudante neste passo."
+            }}
+          ]
+        }}
         """
 
         print("🧠 IA gerando plano final...")
