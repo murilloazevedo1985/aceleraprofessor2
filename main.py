@@ -69,7 +69,7 @@ async def gerar_plano(dados: PlanoRequest):
         
         # 1. Transforma o tema do professor em vetor (3072 dimensões)
         res_emb = genai.embed_content(
-            model="models/text-embedding-004", # O mesmo que usamos na fábrica
+            model="models/gemini-embedding-2", # O mesmo que usamos na fábrica
             content=dados.tema,
             task_type="retrieval_query"
         )
