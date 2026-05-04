@@ -7,7 +7,6 @@ from chromadb.api.types import Documents, EmbeddingFunction, Embeddings
 import json
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from construir_banco import construir_banco
 from pinecone import Pinecone
 
 # --- CONFIGURAÇÕES ---
