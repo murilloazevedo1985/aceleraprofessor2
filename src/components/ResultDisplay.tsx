@@ -1,10 +1,76 @@
 import React, { useState } from 'react';
 import { LessonPlanResponse, ExerciseListResponse, WorkflowMode, Difficulty } from '../types';
-import { Clock, Target, Box, CheckCircle, ArrowLeft, Download, Smartphone, Youtube, Star, Image as ImageIcon, ExternalLink, Eye, EyeOff, Book, Library, AlertCircle, Code, Copy, Check, PlayCircle, Video } from 'lucide-react';
+import { Clock, Target, Box, CheckCircle, ArrowLeft, Download, Smartphone, Youtube, Star, Image as ImageIcon, ExternalLink, Eye, EyeOff, Book, Library, AlertCircle, Code, Copy, Check, PlayCircle, Video, Search } from 'lucide-react';
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
 
-interface ResultDisplayProps {
+// --- COMPONENTES AUXILIARES ---
+// 1. Defina as regras APENAS para o cartãozinho
+interface MediaCardProps {
+  tipo: "simulacao" | "youtube";
+  titulo: string;
+  url?: string;
+}
+
+// 2. Aplique a regra na função do cartão
+const MediaCard = ({ tipo, titulo }: MediaCardProps) => {
+  const isSimulacao = tipo === 'simulacao';
+
+  // Segurança: se a IA não gerou título, o card não aparece
+  if (!titulo || titulo.trim() === '') return null;
+
+  // Lógica de Busca Dinâmica
+  const termoDeBusca = encodeURIComponent(titulo);
+  let urlBusca: string;
+  let rotulo: string;
+  let icone: React.ReactNode;
+  let corFundo: string;
+  let corTexto: string;
+  let corBotao: string;
+
+  if (isSimulacao) {
+    // Busca no Google focando nos melhores sites de simulação
+    urlBusca = `https://www.google.com/search?q=${termoDeBusca}+site:phet.colorado.edu+OR+site:walter-fendt.de+OR+site:vascak.cz`;
+    rotulo = 'Laboratório Virtual';
+    icone = <Smartphone className="w-5 h-5" />;
+    corFundo = 'bg-indigo-50 border-indigo-200';
+    corTexto = 'text-indigo-800';
+    corBotao = 'bg-indigo-600 hover:bg-indigo-700';
+  } else {
+    // Busca diretamente no YouTube
+    urlBusca = `https://www.youtube.com/results?search_query=${termoDeBusca}`;
+    rotulo = 'Vídeo Sugerido';
+    icone = <Youtube className="w-5 h-5" />;
+    corFundo = 'bg-red-50 border-red-200';
+    corTexto = 'text-red-800';
+    corBotao = 'bg-red-600 hover:bg-red-700';
+  }
+
+  return (
+    <div className={`flex flex-col p-6 rounded-2xl border-2 ${corFundo} shadow-sm transition-transform hover:-translate-y-1`}>
+      <div className="flex items-center gap-3 mb-4">
+        <div className={`p-2 rounded-lg ${corTexto} ${isSimulacao ? 'bg-indigo-100' : 'bg-red-100'}`}>{icone}</div>
+        <h4 className={`font-black text-lg ${corTexto}`}>{rotulo}</h4>
+      </div>
+      
+      <p className="text-slate-700 font-medium mb-6 flex-grow leading-relaxed">
+        {titulo}
+      </p>
+      
+      <a 
+        href={urlBusca} 
+        target="_blank" 
+        rel="noopener noreferrer"
+        className={`mt-auto text-center ${corBotao} text-white font-bold py-3 px-4 rounded-xl transition-colors flex items-center justify-center gap-2 shadow-md`}
+      >
+        <Search className="w-4 h-4" />
+        {isSimulacao ? 'Buscar Simulação' : 'Buscar Vídeo'}
+      </a>
+    </div>
+  );
+};
+
+export interface ResultDisplayProps {
   mode: WorkflowMode;
   lessonPlan: LessonPlanResponse | null;
   exerciseList: ExerciseListResponse | null;
@@ -118,6 +184,8 @@ const LatexText: React.FC<{ text: string }> = ({ text }) => {
     </span>
   );
 };
+
+// --- COMPONENTE PRINCIPAL ---
 
 const ResultDisplay: React.FC<ResultDisplayProps> = ({ 
   mode, 
@@ -274,77 +342,61 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({
           ))}
         </div>
       </div>
-{/* CARDS DE RECURSOS EXTERNOS */}
-      {(safeApp || safeVideo) && (
-        <div className="grid md:grid-cols-2 gap-6 mt-8 print:hidden">
-          
-          {/* CARD DO SIMULADOR - LINK DIRETO TRATADO */}
-          {safeApp && (
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col h-full hover:shadow-md transition-shadow">
-              <h4 className="flex items-center gap-2 font-bold text-slate-800 mb-4 text-lg border-b border-slate-100 pb-2">
-                <Smartphone className="w-6 h-6 text-indigo-500" /> Simulador Educacional
-              </h4>
-              <div className="flex-1">
-                <p className="font-bold text-indigo-600 text-lg mb-2">{safeApp.name || safeApp.nome}</p>
-                <p className="text-slate-600 text-sm mb-4 leading-relaxed">{safeApp.description || safeApp.descricao}</p>
-              </div>
-              
-              {/* LINK DIRETO: Removemos espaços vazios para o navegador não jogar no Google */}
-              {safeApp.link && safeApp.link !== "#" && (
-                <a 
-                  href={safeApp.link.replace(/\s+/g, '').startsWith('http') ? safeApp.link.replace(/\s+/g, '') : `https://${safeApp.link.replace(/\s+/g, '')}`}
-                  target="_blank" 
-                  rel="noopener noreferrer" 
-                  className="mt-auto text-center bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold py-3 px-4 rounded-xl transition-colors flex items-center justify-center gap-2"
-                >
-                  <ExternalLink className="w-5 h-5" /> Abrir Simulação
-                </a>
-              )}
-            </div>
-          )}
 
-          {/* CARD DO YOUTUBE - BUSCA AUTOMÁTICA */}
-          {safeVideo && (
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col h-full hover:shadow-md transition-shadow">
-              <h4 className="flex items-center gap-2 font-bold text-slate-800 mb-4 text-lg border-b border-slate-100 pb-2">
-                <Video className="w-6 h-6 text-red-500" /> Vídeo Complementar
-              </h4>
-              <div className="flex-1">
-                <p className="font-bold text-slate-800 text-lg mb-1">{safeVideo.title || safeVideo.titulo}</p>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">{safeVideo.channel || safeVideo.canal}</p>
-                <p className="text-slate-600 text-sm mb-4 leading-relaxed">{safeVideo.description || safeVideo.descricao}</p>
-              </div>
-              
-              {/* LÓGICA DE BUSCA NO YOUTUBE */}
+      {/* SESSÃO DE RECURSOS MULTIMÍDIA NOVA (PhET e YouTube) */}
+      {(plan.simulacaoSugerida?.titulo || plan.videoYoutube?.titulo) && (
+        <div className="mt-16 pt-10 border-t-2 border-slate-100">
+          <h3 className="text-2xl font-black text-slate-800 mb-8 flex items-center gap-2">
+            🚀 Recursos Multimídia Recomendados
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            
+            {/* Lógica da Simulação com Link Exato do Backend */}
+            {plan.simulacaoSugerida?.url && (
               <a 
-                href={`https://www.youtube.com/results?search_query=${encodeURIComponent(`${safeVideo.title || safeVideo.titulo} ${safeVideo.channel || safeVideo.canal}`)}`} 
+                href={plan.simulacaoSugerida.url} 
                 target="_blank" 
-                rel="noreferrer" 
-                className="mt-auto text-center bg-red-50 hover:bg-red-100 text-red-600 font-bold py-3 px-4 rounded-xl transition-colors flex items-center justify-center gap-2"
+                rel="noopener noreferrer"
               >
-                <Youtube className="w-5 h-5" /> Buscar no YouTube
+                <MediaCard 
+                  tipo="simulacao" 
+                  titulo={plan.simulacaoSugerida.titulo} 
+                />
               </a>
-            </div>
-          )}
-
+            )}
+            {/* Aqui continuaria a lógica do seu vídeo do YouTube, se houver... */}
+            {plan.videoYoutube?.titulo && (
+              <MediaCard 
+                tipo="youtube" 
+                titulo={plan.videoYoutube.titulo} 
+                url={plan.videoYoutube.url} 
+              />
+            )}
+          </div>
         </div>
-      )}    </div>
+      )}
+    </div>
   );
 
-  return (
-    <div className="max-w-5xl mx-auto space-y-10 pb-20 print:pb-0">
+return (
+    /* ✅ OPÇÃO 1 ATIVADA: Força o container a liberar a altura e o overflow na impressão */
+    <div className="max-w-5xl mx-auto space-y-10 pb-20 print:pb-0 print:h-auto print:overflow-visible">
       {mode === WorkflowMode.STRATEGY && lessonPlan && renderLessonPlan(lessonPlan)}
       {mode === WorkflowMode.EXERCISES && exerciseList && (
-         <div className="space-y-8 animate-in fade-in duration-500">
-            <div className="bg-white rounded-2xl shadow-xl p-10 border-l-8 border-emerald-600">
+         <div className="space-y-8 animate-in fade-in duration-500 print:h-auto print:overflow-visible">
+            {/* Cabeçalho da Lista */}
+            <div className="bg-white rounded-2xl shadow-xl p-10 border-l-8 border-emerald-600 print:break-inside-avoid">
               <h1 className="text-4xl font-black text-slate-900">{exerciseList.title}</h1>
               <p className="text-slate-500 mt-3 font-bold flex items-center gap-2">
                 <Library className="w-4 h-4 text-emerald-500" /> Fonte Exclusiva: Pasta Cérebro
               </p>
             </div>
-            <div className="space-y-6">
+            
+            {/* Bloco de Questões */}
+            <div className="space-y-6 print:h-auto print:overflow-visible">
               {(exerciseList.exercises || []).map((ex, idx) => (
-                <div key={ex.id} className="bg-white rounded-2xl shadow-lg p-8 border border-slate-200">
+                /* ✅ UPGRADE DE IMPRESSÃO: print:break-inside-avoid impede que a folha A4 corte o meio do cartão */
+                <div key={ex.id} className="bg-white rounded-2xl shadow-lg p-8 border border-slate-200 print:break-inside-avoid">
                   <div className="flex justify-between items-center mb-6">
                     <span className="bg-slate-100 text-slate-500 px-4 py-1.5 rounded-xl text-xs font-black uppercase">Questão {idx + 1}</span>
                     <span className={`px-4 py-1.5 rounded-xl text-xs font-black uppercase ${ex.difficulty === Difficulty.EASY ? 'bg-emerald-100 text-emerald-700' : ex.difficulty === Difficulty.MEDIUM ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}`}>
@@ -402,6 +454,8 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({
             </div>
          </div>
       )}
+      
+      {/* Botões do Fluxo */}
       <div className="flex justify-between pt-10 print:hidden">
         <button onClick={onReset} className="flex items-center px-8 py-4 bg-white border border-slate-300 rounded-2xl text-slate-700 font-black uppercase tracking-widest text-sm hover:bg-slate-50 transition-all active:scale-95"><ArrowLeft className="w-5 h-5 mr-3" /> Reiniciar Fluxo</button>
         <button onClick={() => window.print()} className={`flex items-center px-10 py-4 rounded-2xl shadow-xl text-white font-black uppercase tracking-widest text-sm transition-all active:scale-95 ${mode === WorkflowMode.EXERCISES ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}><Download className="w-5 h-5 mr-3" /> Imprimir / Exportar PDF</button>

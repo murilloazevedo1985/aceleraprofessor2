@@ -1,13 +1,18 @@
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
+import os
+from dotenv import load_dotenv
 
-CREDENCIAIS_ARQUIVO = 'credentials.json'
+# Carrega as variáveis de ambiente do arquivo .env
+load_dotenv()
+
+CAMINHO_JSON_CREDENCIAIS = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "credenciais.json")
 
 print("🕵️ Iniciando Raio-X Total do Robô...\n")
 
 try:
     credenciais = service_account.Credentials.from_service_account_file(
-        CREDENCIAIS_ARQUIVO,
+        CAMINHO_JSON_CREDENCIAIS,
         scopes=['https://www.googleapis.com/auth/drive.readonly']
     )
     servico_drive = build('drive', 'v3', credentials=credenciais)

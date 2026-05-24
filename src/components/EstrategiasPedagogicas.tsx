@@ -1,14 +1,11 @@
 import React, { useState } from 'react';
-import { BookOpen, Sparkles, CheckSquare, Layers, Wrench, MonitorPlay, Users, Upload, FileText, Clock, Target, ClipboardList, Lightbulb, PlayCircle, Smartphone, Video, FileCheck, Loader2, Printer } from 'lucide-react';
+import { BookOpen, Sparkles, CheckSquare, Layers, Wrench, MonitorPlay, Users, Upload, FileText, Loader2 } from 'lucide-react';
 import 'katex/dist/katex.min.css';
-import Latex from 'react-latex-next';
-
-// IMPORTAÇÕES CORRIGIDAS
 import { MenuTemas } from './MenuTemas';
 import ResultDisplay from './ResultDisplay';
-import { WorkflowMode } from '../types';
+import { WorkflowMode, LessonPlanResponse } from '../types';
 
-// --- INTERFACES DO PLANO DE AULA ---
+// --- INTERFACES DA Estratégia Pedagógica ---
 export interface LessonStep {
   time: string;
   title: string;
@@ -28,23 +25,6 @@ export interface YoutubeSuggestion {
   channel: string;
   description: string;
   link: string;
-}
-
-export interface LessonPlanResponse {
-  rawText?: string;
-  title?: string;
-  theme?: string;
-  duration?: string;
-  bnccFocus?: string;
-  learningObjectives?: string[];
-  requiredMaterials?: string[];
-  methodology?: string;
-  steps?: LessonStep[];
-  assessment?: string;
-  adaptationTips?: string;
-  suggestedApp?: SuggestedApp;
-  youtubeVideo?: YoutubeSuggestion;
-  references?: string[];
 }
 
 // --- OPÇÕES DO FORMULÁRIO ---
@@ -86,9 +66,9 @@ const PlaceholderExamples = [
 ];
 
 export default function EstrategiasPedagogicas() {
-  const [step, setStep] = useState<'form' | 'loading' | 'result'>('form');
 
   // --- ESTADOS DO FORMULÁRIO ---
+  const [step, setStep] = useState<'form' | 'loading' | 'result'>('form');
   const [audience, setAudience] = useState("");
   const [classSize, setClassSize] = useState(ClassSizeOptions[1]);
   
@@ -158,66 +138,39 @@ export default function EstrategiasPedagogicas() {
     };
 
     try {
-      // --- A MUDANÇA ESTÁ AQUI ---
-      // Decide automaticamente qual backend usar
-      const API_URL = "https://ensinodefisica.onrender.com/gerar-plano"
-      // Pega a URL da API do ambiente ou usa um valor padrão para desenvolvimento.
-      // Isso torna o código mais flexível entre o ambiente local e o de produção.
-  
+      const BASE_URL = import.meta.env.VITE_API_URL;
+      const API_URL = `${BASE_URL}/gerar-plano`;
 
-      console.log("Enviando requisição para:", API_URL); // Isso ajuda a debugar no console (F12)
+      console.log("🚀 Modo de conexão:", import.meta.env.MODE);
+      console.log("📡 Enviando requisição para:", API_URL);
 
       const resposta = await fetch(API_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(dadosParaOBackend)
       });
-      // ----------------------------
-
+      
       if (!resposta.ok) throw new Error("Erro na comunicação com o servidor Python");
 
       const dadosRetornados = await resposta.json();
-      // ... (código anterior do fetch)
-      console.log("DADOS DO PYTHON:", dadosRetornados);
-      
+      console.log("DADOS BRUTOS DO PYTHON:", dadosRetornados);
 
-      // --- NOVA VERIFICAÇÃO DE TEMA NÃO ENCONTRADO ---
+      // --- VERIFICAÇÃO DE TEMA NÃO ENCONTRADO ---
       if (dadosRetornados.erro_tema_nao_encontrado) {
         alert("⚠️ " + dadosRetornados.erro_tema_nao_encontrado);
-        setStep('form'); // Volta para a tela do formulário
-        return; // Para a execução do código aqui
-      }
-      // ----------------------------------------------
-
-      let planoFormatado;
-      
-      if (dadosRetornados.plano_gerado) {
-        let textoLimpo = dadosRetornados.plano_gerado
-          .replace(/```json/gi, '')
-          .replace(/```/gi, '')
-          .trim();
-        
-        textoLimpo = textoLimpo.replace(/\\./g, (match: string) => {
-          if (match === '\\n' || match === '\\"') return match;
-          if (match === '\\\\') return '\\\\';
-          return '\\' + match;
-        });
-
-        planoFormatado = JSON.parse(textoLimpo);
-        
-        planoFormatado.suggestedApp = planoFormatado.suggestedApp || planoFormatado.aplicativoSugerido || planoFormatado.aplicativo || planoFormatado.suggested_app;
-        planoFormatado.youtubeVideo = planoFormatado.youtubeVideo || planoFormatado.videoYoutube || planoFormatado.video || planoFormatado.youtube_video;
-
-      } else {
-        planoFormatado = dadosRetornados;
+        setStep('form');
+        return;
       }
 
-      setLessonPlan(planoFormatado); 
+      // O backend agora retorna um JSON limpo e estruturado.
+      // Não é mais necessário fazer a limpeza e o mapeamento manual.
+      console.log("🕵️‍♂️ DADOS DO BACKEND PRONTOS PARA O REACT:", dadosRetornados);
+      setLessonPlan(dadosRetornados as LessonPlanResponse);
       setStep('result');
 
-    } catch (erro) {
-      console.error("Falha ao conectar com a API:", erro);
-      alert("⚠️ Aviso: Ocorreu um erro ao conectar com o servidor. O Python está rodando?");
+    } catch (error) {
+      console.error("Erro ao gerar plano:", error);
+      alert("Ocorreu um erro ao gerar o plano de aula. Verifique o console para mais detalhes.");
       setStep('form');
     }
   };
@@ -233,7 +186,7 @@ export default function EstrategiasPedagogicas() {
           </div>
           <div>
             <h2 className="text-2xl font-black text-white tracking-tight">Estratégias Pedagógicas</h2>
-            <p className="text-indigo-300 text-sm font-medium">Configure a turma e gere seu plano de aula com IA</p>
+            <p className="text-indigo-300 text-sm font-medium">Configure a turma e gere sua Estratégia Pedagógica com IA</p>
           </div>
         </div>
         {(step === 'result' || step === 'loading') && (
@@ -255,7 +208,6 @@ export default function EstrategiasPedagogicas() {
               {/* --- COLUNA DA ESQUERDA --- */}
               <div className="space-y-6">
                 
-                {/* CAIXA 1: PÚBLICO ALVO */}
                 <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
                   <h3 className="flex items-center gap-2 font-bold text-slate-800 mb-4 pb-2 border-b border-slate-100">
                     <Users className="w-5 h-5 text-indigo-500" /> Público-Alvo e Tamanho
@@ -284,7 +236,6 @@ export default function EstrategiasPedagogicas() {
                   </div>
                 </div>
 
-                {/* CAIXA 2: TEMA DA AULA */}
                 <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
                   <h3 className="flex items-center gap-2 font-bold text-slate-800 mb-4 pb-2 border-b border-slate-100">
                     <Layers className="w-5 h-5 text-indigo-500" /> Tema da Aula
@@ -299,7 +250,6 @@ export default function EstrategiasPedagogicas() {
               {/* --- COLUNA DA DIREITA --- */}
               <div className="space-y-6">
                 
-                {/* CAIXA 3: RECURSOS DE TI */}
                 <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
                   <h3 className="flex items-center gap-2 font-bold text-slate-800 mb-4 pb-2 border-b border-slate-100">
                     <MonitorPlay className="w-5 h-5 text-indigo-500" /> Recursos de TI
@@ -317,7 +267,6 @@ export default function EstrategiasPedagogicas() {
                   </div>
                 </div>
 
-                {/* CAIXA 4: MATERIAIS */}
                 <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
                   <h3 className="flex items-center gap-2 font-bold text-slate-800 mb-4 pb-2 border-b border-slate-100">
                     <Wrench className="w-5 h-5 text-indigo-500" /> Materiais e Laboratório
@@ -408,7 +357,7 @@ export default function EstrategiasPedagogicas() {
                 onClick={handleGeneratePlan}
                 className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-4 rounded-xl font-black text-lg shadow-lg flex items-center gap-2 transition-transform hover:scale-105"
               >
-                <Sparkles className="w-6 h-6" /> Gerar Plano de Aula Definitivo
+                <Sparkles className="w-6 h-6" /> Gerar Estratégia Pedagógica
               </button>
             </div>
             
@@ -419,7 +368,7 @@ export default function EstrategiasPedagogicas() {
           <div className="h-full flex flex-col items-center justify-center text-center p-8">
             <Loader2 className="w-16 h-16 text-indigo-500 animate-spin mb-6" />
             <h3 className="text-2xl font-black text-slate-800 mb-2">Analisando Arquivos e Parâmetros...</h3>
-            <p className="text-slate-500 text-lg max-w-md">A IA  está elaborando uma Estratégia Pedagógica inspirada no seu contexto e baseada no nosso banco de dados.</p>
+            <p className="text-slate-500 text-lg max-w-md">A IA está elaborando uma Estratégia Pedagógica inspirada no seu contexto e baseada no nosso banco de dados.</p>
           </div>
         )}
 
@@ -441,7 +390,7 @@ export default function EstrategiasPedagogicas() {
             />
           </div>
         )}
-
+        
       </div>
     </div>
   );

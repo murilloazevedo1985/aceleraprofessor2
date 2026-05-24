@@ -2,12 +2,12 @@ import React, { useState } from 'react';
 import { BookOpen, Sparkles, CheckSquare, Layers, Wrench, MonitorPlay, Users, Upload, FileText, Clock, Target, ClipboardList, Lightbulb, PlayCircle, Smartphone, Video, FileCheck, Loader2, Printer } from 'lucide-react';
 import 'katex/dist/katex.min.css';
 
-// IMPORTAÇÕES CORRIGIDAS
+// IMPORTAÇÕES
 import { MenuTemas } from './MenuTemas';
 import ResultDisplay from './ResultDisplay';
 import { WorkflowMode } from '../types';
 
-// --- INTERFACES DO PLANO DE AULA ---
+// --- INTERFACES DO Estratégia Pedagógica ---
 export interface LessonStep {
   time: string;
   title: string;
@@ -137,12 +137,13 @@ export default function EstrategiasPedagogicas() {
     setTopic(partes[1] || nomeDoTema);
   };
 
+  // --- FUNÇÃO CORRIGIDA AQUI ---
   const handleGeneratePlan = async () => {
     if (!category || !topic) {
       alert("Por favor, selecione um Tema da Aula antes de gerar o plano.");
       return;
     }
-
+    
     setStep('loading');
     
     const dadosParaOBackend = {
@@ -157,32 +158,25 @@ export default function EstrategiasPedagogicas() {
     };
 
     try {
-      // --- A MUDANÇA ESTÁ AQUI ---
-      // Decide automaticamente qual backend usar
-      const API_URL = "https://ensinodefisica.onrender.com"; // URL do backend Python (ajuste conforme necessário)
+      const API_URL = "https://ensinodefisica.onrender.com"; 
 
-      console.log("Enviando requisição para:", API_URL); // Isso ajuda a debugar no console (F12)
+      console.log("Enviando requisição para:", API_URL); 
 
       const resposta = await fetch(API_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(dadosParaOBackend)
       });
-      // ----------------------------
 
       if (!resposta.ok) throw new Error("Erro na comunicação com o servidor Python");
 
       const dadosRetornados = await resposta.json();
-      // ... (código anterior do fetch)
       
-
-      // --- NOVA VERIFICAÇÃO DE TEMA NÃO ENCONTRADO ---
       if (dadosRetornados.erro_tema_nao_encontrado) {
         alert("⚠️ " + dadosRetornados.erro_tema_nao_encontrado);
-        setStep('form'); // Volta para a tela do formulário
-        return; // Para a execução do código aqui
+        setStep('form'); 
+        return; 
       }
-      // ----------------------------------------------
 
       let planoFormatado;
       
@@ -228,7 +222,7 @@ export default function EstrategiasPedagogicas() {
           </div>
           <div>
             <h2 className="text-2xl font-black text-white tracking-tight">Estratégias Pedagógicas</h2>
-            <p className="text-indigo-300 text-sm font-medium">Configure a turma e gere seu plano de aula com IA</p>
+            <p className="text-indigo-300 text-sm font-medium">Configure a turma e gere seu Estratégia Pedagógica com IA</p>
           </div>
         </div>
         {(step === 'result' || step === 'loading') && (
@@ -403,7 +397,7 @@ export default function EstrategiasPedagogicas() {
                 onClick={handleGeneratePlan}
                 className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-4 rounded-xl font-black text-lg shadow-lg flex items-center gap-2 transition-transform hover:scale-105"
               >
-                <Sparkles className="w-6 h-6" /> Gerar Plano de Aula Definitivo
+                <Sparkles className="w-6 h-6" /> Gerar Estratégia Pedagógica Definitivo
               </button>
             </div>
             

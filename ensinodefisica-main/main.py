@@ -101,21 +101,21 @@ async def gerar_plano(dados: PlanoRequest):
         # 2. Configura o Prompt (Simplificado para focar na formatação)
         prompt = f"""
         Você é um assistente educacional de Física. 
-Regra Absoluta: Você DEVE basear o plano de aula EXCLUSIVAMENTE nos documentos fornecidos na sua base de conhecimento (pasta). 
-Se o usuário pedir um tema que NÃO está presente nos documentos fornecidos, você NÃO deve gerar o plano de aula.
-Nesse caso, você deve retornar APENAS o seguinte JSON exato e nada mais:
+        Regra Absoluta: Você DEVE basear o Estratégia Pedagógica EXCLUSIVAMENTE nos documentos fornecidos na sua base de conhecimento (pasta). 
+        Se o usuário pedir um tema que NÃO está presente nos documentos fornecidos, você NÃO deve gerar o Estratégia Pedagógica.
+        Nesse caso, você deve retornar APENAS o seguinte JSON exato e nada mais:
 {
   "erro_tema_nao_encontrado": "Desculpe, mas este tema não consta no material didático da nossa base de dados. Por favor, escolha um tema disponível."
 }
         
         {contexto_rag}
         
-        O usuário solicitou um plano de aula com os seguintes dados:
+        O usuário solicitou um Estratégia Pedagógica com os seguintes dados:
         - TEMA: {dados.tema}
         - TURMA: {dados.turma}
         - RECURSOS DISPONÍVEIS: {", ".join(dados.recursos)}
 
-        Crie o plano de aula em JSON seguindo estas regras rigorosas:
+        Crie o Estratégia Pedagógica em JSON seguindo estas regras rigorosas:
         1. Use LaTeX para fórmulas (ex: $E=mc^2$).
         2. Use emojis para destacar pontos e NUNCA use asteriscos para negrito.
         3. No campo 'link' de vídeos e apps, deixe sempre VAZIO "".

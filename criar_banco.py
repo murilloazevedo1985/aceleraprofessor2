@@ -1,6 +1,7 @@
 
 import os
 import io
+from dotenv import load_dotenv
 import time
 from pinecone import Pinecone # Adeus ChromaDB, Olá Pinecone!
 import google.generativeai as genai
@@ -12,12 +13,23 @@ import docx
 from PIL import Image
 import pytesseract
 
+# --- SOLUÇÃO ROBUSTA PARA ENCONTRAR O .ENV ---
+# Constrói o caminho absoluto para o arquivo .env na mesma pasta do script
+caminho_env = os.path.join(os.path.dirname(__file__), '.env')
+
+# Carrega as variáveis de ambiente do arquivo .env
+load_dotenv(dotenv_path=caminho_env)
+
 # --- 1. CONFIGURAÇÕES E CREDENCIAIS ---
-CHAVE_API_GEMINI =  "AIzaSyCnOZAYx_zjnFq1FkmanKZ4j0Ibw93n7Bc"
-CHAVE_API_PINECONE = "pcsk_45MtAp_L8EKvhxjmroEujy1QDQ2xjHmvu8H17ZHnM8Pe6w68HVnyFGkeTqMjBnXzgVHUPu" # Cole a chave que você pegou no site
+CHAVE_API_GEMINI = os.getenv("GEMINI_API_KEY")
+CHAVE_API_PINECONE = os.getenv("PINECONE_API_KEY")
 NOME_INDEX_PINECONE = "aulas-fisica"
 ID_PASTA_TESTE_DRIVE = "1jZztziuVQ8e7jJqeBAUXiNP2XQT6fcCJ"
 CAMINHO_JSON_CREDENCIAIS = "credenciais.json"
+
+if not CHAVE_API_PINECONE or not CHAVE_API_GEMINI:
+    raise ValueError("Certifique-se de que PINECONE_API_KEY e GEMINI_API_KEY estão definidas no seu arquivo .env")
+
 
 genai.configure(api_key=CHAVE_API_GEMINI)
 

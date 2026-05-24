@@ -172,6 +172,8 @@ export interface YoutubeSuggestion {
 }
 
 export interface LessonPlanResponse {
+  [x: string]: any;
+  simulacaoPhet: any;
   title: string;
   theme: string;
   duration: string;

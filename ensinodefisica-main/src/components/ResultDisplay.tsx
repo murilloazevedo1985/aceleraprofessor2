@@ -6,7 +6,7 @@ import 'katex/dist/katex.min.css';
 
 interface ResultDisplayProps {
   mode: WorkflowMode;
-  lessonPlan: LessonPlanResponse | null;
+  lessonPlan: LessonPlanResponse | null;  /* <-- CORRIGIDO AQUI */
   exerciseList: ExerciseListResponse | null;
   generatedImageUrl: string | null;
   generatedAnimationSvg: string | null;

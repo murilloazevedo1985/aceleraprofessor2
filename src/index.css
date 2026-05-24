@@ -1,1 +1,26 @@
 @import "tailwindcss";
+@media print {
+  /* 1. Destrava absolutamente todas as tags principais do sistema */
+  html, 
+  body, 
+  #root, 
+  main, 
+  div[class*="h-screen"], 
+  div[class*="overflow-hidden"] {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    position: static !important;
+  }
+
+  /* 2. Remove qualquer barra de rolagem feia que queira aparecer no papel */
+  ::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  /* 3. Garante que o fundo da página fique branco e o texto escuro para o professor */
+  body {
+    background: white !important;
+    color: #0f172a !important;
+  }
+}

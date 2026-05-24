@@ -48,7 +48,7 @@ export const generateLessonPlan = async (input: TeacherInput): Promise<LessonPla
     
     Arquivos no Contexto Atual: ${input.contextFiles.map(f => f.name).join(", ")}
 
-    TAREFA: Gere um Plano de Aula Pedagógico fundamentado na pasta 'Cérebro' e nos Sites de Confiança. Se o tópico for Java, inclua snippets de código Java didáticos nos passos da aula. Sempre que usar informações de um dos sites aprovados, cite-o brevemente.
+    TAREFA: Gere um Estratégia Pedagógica Pedagógico fundamentado na pasta 'Cérebro' e nos Sites de Confiança. Se o tópico for Java, inclua snippets de código Java didáticos nos passos da aula. Sempre que usar informações de um dos sites aprovados, cite-o brevemente.
   `;
 
   const parts: any[] = [{ text: textPrompt }];
