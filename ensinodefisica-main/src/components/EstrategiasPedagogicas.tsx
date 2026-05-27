@@ -5,46 +5,7 @@ import 'katex/dist/katex.min.css';
 // IMPORTAÇÕES
 import { MenuTemas } from './MenuTemas';
 import ResultDisplay from './ResultDisplay';
-import { WorkflowMode } from '../types';
-
-// --- INTERFACES DO Estratégia Pedagógica ---
-export interface LessonStep {
-  time: string;
-  title: string;
-  description: string;
-  teacherRole: string;
-  studentRole: string;
-}
-
-export interface SuggestedApp {
-  name: string;
-  description: string;
-  link: string;
-}
-
-export interface YoutubeSuggestion {
-  title: string;
-  channel: string;
-  description: string;
-  link: string;
-}
-
-export interface LessonPlanResponse {
-  rawText?: string;
-  title?: string;
-  theme?: string;
-  duration?: string;
-  bnccFocus?: string;
-  learningObjectives?: string[];
-  requiredMaterials?: string[];
-  methodology?: string;
-  steps?: LessonStep[];
-  assessment?: string;
-  adaptationTips?: string;
-  suggestedApp?: SuggestedApp;
-  youtubeVideo?: YoutubeSuggestion;
-  references?: string[];
-}
+import { WorkflowMode, LessonPlanResponse } from '../types';
 
 // --- OPÇÕES DO FORMULÁRIO ---
 const TargetAudienceOptions = [
@@ -417,7 +378,12 @@ export default function EstrategiasPedagogicas() {
           <div className="w-full animate-in slide-in-from-bottom-4 duration-500 pb-20">
             <ResultDisplay 
               mode={WorkflowMode.STRATEGY} 
-              lessonPlan={lessonPlan}
+              lessonPlan={{
+                ...lessonPlan,
+                // ensure optional fields expected by ResultDisplay exist
+                discussionTopics: (lessonPlan as any).discussionTopics ?? [],
+                visualImagePrompt: (lessonPlan as any).visualImagePrompt ?? null,
+              }}
               exerciseList={null}
               generatedImageUrl={null}
               generatedAnimationSvg={null}

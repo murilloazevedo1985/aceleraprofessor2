@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
-import { BookOpen, Sparkles, CheckSquare, Layers, Wrench, MonitorPlay, Users, Upload, FileText, Loader2 } from 'lucide-react';
+import { BookOpen, Sparkles, CheckSquare, Layers, Wrench, MonitorPlay, Users, FileText, Loader2, Upload } from 'lucide-react';
 import 'katex/dist/katex.min.css';
 import { MenuTemas } from './MenuTemas';
 import ResultDisplay from './ResultDisplay';
-import { WorkflowMode, LessonPlanResponse } from '../types';
+import { WorkflowMode, LessonPlanResponse, PhysicsCategories } from '../types';
 
-// --- INTERFACES DA Estratégia Pedagógica ---
 export interface LessonStep {
   time: string;
   title: string;
@@ -14,13 +13,13 @@ export interface LessonStep {
   studentRole: string;
 }
 
-export interface SuggestedApp {
-  name: string;
-  description: string;
-  link: string;
+export interface simulacaoSugerida {
+  titulo: string;
+  termoBusca: string;
+  url: string;
 }
 
-export interface YoutubeSuggestion {
+export interface videoYoutube {
   title: string;
   channel: string;
   description: string;
@@ -65,6 +64,51 @@ const PlaceholderExamples = [
   "Ex: Analisar o movimento de um elevador para entender as Leis de Newton."
 ];
 
+// --- MAPEAMENTO TEMA > FENÔMENO ---
+const phenomenonOptions: Record<string, Record<string, string[]>> = {
+  // Mecânica
+  'Mecânica': {
+    'Cinemática': ['Movimento Retilíneo Uniforme (MRU)', 'Movimento Retilíneo Uniformemente Variado (MRUV)', 'Queda Livre e Lançamento Vertical', 'Lançamento Oblíquo', 'Movimento Circular Uniforme (MCU)'],
+    'Dinâmica (Leis de Newton)': ['1ª, 2ª e 3ª Leis de Newton', 'Força de Atrito (Estático e Cinético)', 'Planos Inclinados', 'Forças em Sistemas de Blocos', 'Força Centrípeta'],
+    'Trabalho, Energia e Potência': ['Trabalho de uma Força', 'Energia Cinética e Teorema da Energia Cinética', 'Energia Potencial (Gravitacional e Elástica)', 'Sistemas Conservativos e Dissipativos', 'Potência e Rendimento'],
+    'Impulso, Quantidade de Movimento e Colisões': ['Impulso e Variação da Quantidade de Movimento', 'Conservação da Quantidade de Movimento', 'Colisões (Elásticas e Inelásticas)', 'Centro de Massa'],
+    'Estática e Equilíbrio': ['Equilíbrio de Ponto Material', 'Equilíbrio de Corpo Extenso', 'Momento de uma Força (Torque)', 'Centro de Massa e Gravidade', 'Alavancas e Roldanas'],
+    'Hidrostática': ['Pressão e Densidade', 'Teorema de Stevin', 'Princípio de Pascal', 'Princípio de Arquimedes (Empuxo)'],
+    'Gravitação Universal': ['Leis de Kepler', 'Lei da Gravitação Universal de Newton', 'Campo Gravitacional', 'Movimento de Satélites, calendário e órbitas, astronomia'],
+  },
+  
+  // Termologia
+  'Termologia': {
+    'Termometria': ['Escalas Termométricas (Celsius, Fahrenheit, Kelvin)', 'Equilíbrio Térmico', 'O Termômetro e seu Funcionamento'],
+    'Calorimetria': ['Calor Sensível e Calor Latente', 'Trocas de Calor e Calorímetro', 'Diagramas de Fase', 'Propagação de Calor (Condução, Convecção, Irradiação)'],
+    'Gases Ideais': ['Equação de Clapeyron (PV=nRT)', 'Transformações Gasosas (Isotérmica, Isobárica, Isocórica)', 'Mistura de Gases'],
+    'Termodinâmica': ['1ª Lei da Termodinâmica (Trabalho e Energia Interna)', '2ª Lei da Termodinâmica (Máquinas Térmicas e Entropia)', 'Ciclo de Carnot'],
+  },
+  
+  // Óptica e Ondulatória
+  'Óptica e Ondulatória': {
+    'Óptica Geométrica': ['Princípios da Óptica Geométrica', 'Reflexão da Luz e Espelhos Planos', 'Espelhos Esféricos (Formação de Imagens)', 'Refração da Luz e Lei de Snell-Descartes', 'Lentes Esféricas Delgadas (Formação de Imagens)'],
+    'Fenômenos Ondulatórios': ['Reflexão e Refração de Ondas', 'Difração de Ondas', 'Interferência de Ondas (Construtiva e Destrutiva)', 'Polarização da Luz'],
+    'Acústica': ['Fontes Sonoras e Qualidades do Som (Altura, Timbre, Intensidade)', 'Velocidade do Som', 'Reflexão do Som (Eco e Reverberação)', 'Ressonância', 'Efeito Doppler'],
+  },
+  
+  // Eletromagnetismo
+  'Eletromagnetismo': {
+    'Eletrostática': ['Carga Elétrica e Processos de Eletrização', 'Força Elétrica (Lei de Coulomb)', 'Campo Elétrico', 'Potencial Elétrico e Energia Potencial Elétrica'],
+    'Eletrodinâmica (Circuitos)': ['Corrente Elétrica e Leis de Ohm', 'Circuitos Elétricos (Série, Paralelo, Misto)', 'Potência e Energia Elétrica', 'Geradores e Receptores Elétricos', 'Leis de Kirchhoff'],
+    'Magnetismo': ['Ímãs e Campo Magnético', 'Força Magnética sobre Cargas e Fios', 'Campo Magnético gerado por Correntes (Fio Retilíneo e Solenoide)'],
+    'Indução Eletromagnética': ['Fluxo Magnético', 'Lei de Faraday-Lenz', 'Transformadores e Motores Elétricos', 'Ondas Eletromagnéticas'],
+  },
+  
+  // Física Moderna
+  'Física Moderna': {
+    'Relatividade (Especial e Geral)': ['Postulados de Einstein', 'Dilatação do Tempo e Contração do Espaço', 'Equivalência Massa-Energia (E=mc²)', 'Princípios da Relatividade Geral'],
+    'Física Quântica': ['Radiação de Corpo Negro e Hipótese de Planck', 'Efeito Fotoelétrico', 'Modelo Atômico de Bohr', 'Dualidade Onda-Partícula'],
+    'Física Nuclear e Radioatividade': ['Estrutura do Núcleo Atômico', 'Decaimento Radioativo (Alfa, Beta, Gama)', 'Meia-vida', 'Fissão e Fusão Nuclear'],
+    'Modelo Padrão e Partículas': ['Partículas Elementares (Quarks e Léptons)', 'Forças Fundamentais da Natureza', 'Bóson de Higgs'],
+  },
+};
+
 export default function EstrategiasPedagogicas() {
 
   // --- ESTADOS DO FORMULÁRIO ---
@@ -74,12 +118,13 @@ export default function EstrategiasPedagogicas() {
   
   const [category, setCategory] = useState("");
   const [topic, setTopic] = useState("");
+  const [phenomenon, setPhenomenon] = useState("");
   
   const [selectedIT, setSelectedIT] = useState<string[]>([]);
   const [labAccess, setLabAccess] = useState(LabAccessOptions[0]);
   const [selectedMaterials, setSelectedMaterials] = useState<string[]>([]);
   
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [tomAbordagem, setTomAbordagem] = useState('conceitual'); // NOVO ESTADO PARA O TOM
   const [additionalNotes, setAdditionalNotes] = useState('');
   
   const [randomExample] = useState(() => {
@@ -116,6 +161,7 @@ export default function EstrategiasPedagogicas() {
     const partes = nomeDoTema.split(" > ");
     setCategory(partes[0] || nomeDoTema);
     setTopic(partes[1] || nomeDoTema);
+    setPhenomenon(""); // Reseta o fenômeno ao trocar o tema
   };
 
   const handleGeneratePlan = async () => {
@@ -128,13 +174,15 @@ export default function EstrategiasPedagogicas() {
     
     const dadosParaOBackend = {
       tema: `${category}: ${topic}`,
+      fenomeno: phenomenon, // Novo campo!
       turma: `${audience} (${classSize})`,
       recursos: [
         ...selectedIT,
         labAccess,
-        ...selectedMaterials,
-        additionalNotes ? `Observações do Professor: ${additionalNotes}` : ""
-      ].filter(Boolean)
+        ...selectedMaterials
+      ].filter(Boolean),
+      tom_abordagem: tomAbordagem, // NOVO CAMPO ENVIADO
+      observacoes: additionalNotes || ""
     };
 
     try {
@@ -243,6 +291,24 @@ export default function EstrategiasPedagogicas() {
                   <div className="w-full relative z-50">
                      <MenuTemas onSelectTheme={handleTemaEscolhido} />
                   </div>
+                  {/* --- OTIMIZAÇÃO DE UX: Campo sempre visível --- */}
+                  <div className="mt-4">
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Fenômeno Estudado</label>
+                    <select
+                      value={phenomenon}
+                      onChange={(e) => setPhenomenon(e.target.value)}
+                      required
+                      disabled={!topic || !phenomenonOptions[category]?.[topic]}
+                      className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-white disabled:bg-slate-100 disabled:cursor-not-allowed"
+                    >
+                      <option value="" disabled hidden>
+                        {topic ? 'Especifique o fenômeno...' : 'Selecione um tema primeiro...'}
+                      </option>
+                      {category && topic && phenomenonOptions[category]?.[topic]?.map((opt) => (
+                        <option key={opt} value={opt}>{opt}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
               </div>
@@ -305,6 +371,32 @@ export default function EstrategiasPedagogicas() {
                     )}
                   </div>
                 </div>
+                {/* NOVO BLOCO: SELEÇÃO DE TOM PEDAGÓGICO */}
+                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                  <h3 className="flex items-center gap-2 font-bold text-slate-800 mb-4 pb-2 border-b border-slate-100">
+                    <Sparkles className="w-5 h-5 text-indigo-500" /> Tom da Abordagem
+                  </h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {[
+                      { id: 'conceitual', label: 'Conceitual' },
+                      { id: 'analitico', label: 'Analítico' },
+                      { id: 'numerico', label: 'Numérico' },
+                      { id: 'experimental', label: 'Experimental' },
+                      { id: 'historico', label: 'Histórico' },
+                    ].map(tom => (
+                      <button
+                        key={tom.id}
+                        onClick={() => setTomAbordagem(tom.id)}
+                        className={`text-center p-3 rounded-xl border-2 font-bold transition-all duration-200 text-sm ${
+                          tomAbordagem === tom.id
+                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-md'
+                            : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:bg-slate-50'
+                        }`}
+                      >{tom.label}</button>
+                    ))}
+                  </div>
+                </div>
+
               </div>
             </div>
 
@@ -315,28 +407,6 @@ export default function EstrategiasPedagogicas() {
               </h3>
               
               <div className="flex flex-col gap-8">
-                <div>
-                  <label className="block text-sm font-bold text-slate-500 uppercase mb-3">
-                    Arquivo Base ou Material de Referência <span className="text-slate-400 font-normal ml-1">(Opcional - Visual)</span>
-                  </label>
-                  <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-slate-300 border-dashed rounded-xl cursor-pointer bg-slate-50 hover:bg-slate-100 hover:border-indigo-400 transition-all group">
-                    <div className="flex flex-col items-center justify-center pt-5 pb-6 text-center px-4">
-                      <Upload className="w-10 h-10 text-slate-400 group-hover:text-indigo-500 mb-3 transition-colors" />
-                      {selectedFile ? (
-                        <p className="text-lg font-bold text-indigo-600 truncate w-full px-4">{selectedFile.name}</p>
-                      ) : (
-                        <>
-                          <p className="text-base text-slate-600 mb-1">
-                            <span className="font-bold text-indigo-600">Clique para enviar</span> ou arraste o arquivo até aqui
-                          </p>
-                          <p className="text-xs text-slate-400">Suporta: PDF, DOCX, TXT (Máx: 10MB)</p>
-                        </>
-                      )}
-                    </div>
-                    <input type="file" className="hidden" onChange={(e) => { if (e.target.files && e.target.files.length > 0) setSelectedFile(e.target.files[0]); }} />
-                  </label>
-                </div>
-
                 <div>
                   <label className="block text-sm font-bold text-slate-500 uppercase mb-3">
                     Observações Complementares <span className="text-slate-400 font-normal ml-1">(Opcional)</span>

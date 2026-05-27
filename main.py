@@ -1,5 +1,6 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 import google.generativeai as genai
 import json
@@ -8,7 +9,10 @@ import os
 from dotenv import load_dotenv
 from googlesearch import search
 from pinecone import Pinecone
+import mimetypes 
 from duckduckgo_search import DDGS
+from pdf2image import convert_from_path
+import google.generativeai as genai
 
 # --- SOLUÇÃO ROBUSTA PARA ENCONTRAR O .ENV ---
 # Constrói o caminho absoluto para o arquivo .env na mesma pasta do script
@@ -51,8 +55,11 @@ class PerguntaRequest(BaseModel):
 
 class PlanoRequest(BaseModel):
     tema: str
+    fenomeno: str | None = None
     turma: str
     recursos: list[str]
+    observacoes: str | None = None
+    tom_abordagem: str | None = None # NOVO CAMPO PARA O TOM
 
 @app.post("/perguntar")
 async def perguntar(dados: PerguntaRequest):
@@ -62,39 +69,128 @@ async def perguntar(dados: PerguntaRequest):
     # Lógica do Agente Cognitivo: Busca Automática do Link
     link_direto = None
     query = f"site:phet.colorado.edu OR site:ophysics.com OR site:vascak.cz simulação {dados.fenomeno}"
+    
+    # --- OTIMIZAÇÃO DE PERFORMANCE ---
+    # A biblioteca 'googlesearch' é síncrona (bloqueante).
+    # Usamos run_in_threadpool para executá-la em uma thread separada,
+    # não bloqueando o event loop principal do FastAPI.
     try:
-        resultados = list(search(query, num=1, stop=1, pause=2))
+        # A função search é passada como um callable, e seus argumentos em seguida.
+        resultados = await run_in_threadpool(list, search(query, num=1, stop=1, pause=2))
         if resultados:
             link_direto = resultados[0]
     except Exception as e:
         print(f"Erro na busca silenciosa: {e}")
-        link_direto = None
 
     return {"resposta": resposta_ia, "link_direto": link_direto}
+def extrair_texto_de_pdf_com_visao(caminho_pdf):
+    print(f"📸 Convertendo páginas do PDF em imagens para análise visual...")
+    # Converte apenas as primeiras páginas ou o livro todo (cuidado com o limite de tokens)
+    paginas = convert_from_path(caminho_pdf, dpi=150)
+    
+    model = genai.GenerativeModel('gemini-1.5-flash')
+    texto_completo_extraido = ""
+    
+    for i, pagina in enumerate(paginas):
+        print(f"👁️ Analisando visualmente a página {i+1}...")
+        # Salva temporariamente a página como imagem
+        caminho_imagem = f"temp_pagina_{i}.png"
+        pagina.save(caminho_imagem, 'PNG')
+        
+        # Envia para o Gemini ler a imagem e extrair inclusive as fórmulas em LaTeX
+        imagem_upload = genai.upload_file(path=caminho_imagem)
+        
+        prompt = """
+        Transcreva o conteúdo desta página de livro de física para Markdown.
+        Converta todas as fórmulas matemáticas e físicas para a notação LaTeX apropriada usando $ ou $$.
+        """
+        
+        response = model.generate_content([prompt, imagem_upload])
+        texto_completo_extraido += response.text + "\n"
+        
+        # Limpa o arquivo temporário
+        import os
+        os.remove(caminho_imagem)
+        
+    return texto_completo_extraido
+
+@app.post("/extrair-latex-imagem")
+async def extrair_latex_imagem(file: UploadFile = File(...)):
+    try:
+        print(f"\n📄 Recebendo imagem '{file.filename}' para extração de LaTeX...")
+
+        # 1. Lê os bytes da imagem enviada
+        image_bytes = await file.read()
+
+        # 2. Faz o upload do arquivo para o Gemini
+        # O SDK do Gemini precisa do tipo MIME para processar o arquivo corretamente.
+        mime_type, _ = mimetypes.guess_type(file.filename)
+        if not mime_type:
+            mime_type = "application/octet-stream" # Fallback
+
+        imagem_pagina = genai.upload_file(
+            path=image_bytes,
+            display_name=file.filename,
+            mime_type=mime_type
+        )
+        print(f"✅ Imagem '{file.filename}' enviada para a IA.")
+
+        # 3. Usa o prompt cirúrgico para extração
+        prompt = """
+        Você é um extrator de documentos científicos de alta precisão. 
+        Transcreva o conteúdo desta página do livro didático para Markdown.
+        REGRA CRUCIAL: Se encontrar qualquer fórmula, equação ou gráfico matemático (mesmo que seja uma imagem/figura), 
+        converta-o INTEGRALMENTE para a notação LaTeX apropriada usando $ para equações na linha ou $$ para equações isoladas.
+        Não pule nenhuma fórmula.
+        """
+
+        # 4. Gera o conteúdo usando o modelo multimodal
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        response = await model.generate_content_async([prompt, imagem_pagina])
+
+        print("✅ Conteúdo extraído com sucesso!")
+        return {"texto_extraido": response.text}
+
+    except Exception as e:
+        print(f"❌ Erro ao extrair conteúdo da imagem: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro ao processar imagem: {e}")
 
 @app.post("/gerar-plano")
 async def gerar_plano(dados: PlanoRequest):
     try:
-        print(f"\n🚀 Buscando '{dados.tema}' no Pinecone (Nuvem)...")
+        # Combina tema e fenômeno para uma busca mais precisa
+        texto_busca = f"{dados.tema} - {dados.fenomeno}" if dados.fenomeno else dados.tema
+        print(f"\n🚀 Buscando por: '{texto_busca}' no Pinecone (Nuvem)...")
         
         # 1. Transforma o tema do professor em vetor
         res_emb = await genai.embed_content_async(
             model="models/gemini-embedding-2", # O mesmo que usamos na fábrica
-            content=dados.tema,
+            content=texto_busca,
             task_type="retrieval_query"
         )
         vetor_pergunta = res_emb['embedding']
 
-        # 2. Busca no Pinecone os 5 trechos mais parecidos
-        resultados = index.query(
+        # 2. --- OTIMIZAÇÃO DE PERFORMANCE ---
+        # A biblioteca do Pinecone é síncrona (bloqueante).
+        # Executamos a consulta em uma thread separada para não bloquear o servidor.
+        print("⚡️ Executando a busca no Pinecone em uma thread separada...")
+        resultados = await run_in_threadpool(
+            index.query,
             vector=vetor_pergunta,
             top_k=5,
-            include_metadata=True # Para vir o texto original que salvamos
+            include_metadata=True
         )
-        
+        print("\n🔍 --- DEBUG: CONTEÚDO RECUPERADO DO PINECONE ---")
+        if not resultados['matches']:
+            print("⚠️ O Pinecone retornou VAZIO! Nada foi encontrado no banco.")
+        else:
+                for i, match in enumerate(resultados['matches']):
+                    print(f"Trecho {i+1} (Fonte: {match['metadata'].get('fonte')}):")
+                print(f"Texto: {match['metadata'].get('texto')[:200]}...") # Mostra os primeiros 200 caracteres
+                print("------------------------------------------------\n")
         # Extrai os textos e as pontuações (scores)
-        textos_encontrados = [match['metadata']['texto'] for match in resultados['matches']]
-        scores = [match['score'] for match in resultados['matches']]
+                textos_encontrados = [match['metadata']['texto'] for match in resultados['matches']]
+                scores = [match['score'] for match in resultados['matches']]
 
         print(f"🔍 Encontrados {len(textos_encontrados)} trechos.")
         print(f"📏 Scores de similaridade: {scores}")
@@ -102,7 +198,7 @@ async def gerar_plano(dados: PlanoRequest):
         # --- NOVA BARREIRA DE FERRO ---
         # No Pinecone (Cosine), quanto MAIOR o score, MAIS parecido é.
         # 0.70 é uma excelente nota de corte para conteúdos de Física.
-        NOTA_DE_CORTE = 0.65 
+        NOTA_DE_CORTE = 0.70 
         
         if not textos_encontrados or scores[0] < NOTA_DE_CORTE:
             print("⛔ BLOQUEADO: Conteúdo não encontrado no material do Drive.")
@@ -110,20 +206,98 @@ async def gerar_plano(dados: PlanoRequest):
         
         contexto_rag = "\n\n---\n\n".join(textos_encontrados)
 
+        # --- NOVA VALIDAÇÃO: O CONTEXTO SUPORTA O TOM PEDAGÓGICO? ---
+        def validar_contexto_para_tom(tom: str, contexto: str) -> bool:
+            """Verifica se o contexto tem informações mínimas para o tom."""
+            contexto_lower = contexto.lower()
+            if tom == "numerico":
+                # Procura por qualquer dígito no texto.
+                return bool(re.search(r'\d', contexto))
+            if tom == "experimental":
+                # Procura por palavras-chave relacionadas a experimentos.
+                palavras_chave = ["experimento", "laboratório", "prática", "coleta de dados", "montagem", "roteiro"]
+                return any(palavra in contexto_lower for palavra in palavras_chave)
+            if tom == "analitico":
+                # Procura por sintaxe LaTeX ($...$) ou palavras como derivada/integral.
+                return "$" in contexto or "derivada" in contexto_lower or "integral" in contexto_lower
+            if tom == "historico":
+                # Procura por anos (4 dígitos) ou palavras-chave históricas.
+                return bool(re.search(r'\b(1[5-9]\d{2}|20\d{2})\b', contexto)) or "século" in contexto_lower or "história" in contexto_lower
+            # Tom 'conceitual' é o padrão e geralmente é atendido por qualquer texto.
+            return True
+
+        if not validar_contexto_para_tom(dados.tom_abordagem, contexto_rag):
+            print(f"⛔ BLOQUEADO: O contexto não tem informações para a abordagem '{dados.tom_abordagem}'.")
+            return {"erro_tema_nao_encontrado": f"O material didático encontrado sobre o tema não possui informações suficientes para uma abordagem '{dados.tom_abordagem}'. Por favor, tente uma abordagem mais conceitual ou teórica."}
+        
+        print(f"✅ Contexto validado para a abordagem '{dados.tom_abordagem}'.")
+
+        # --- INSTRUÇÃO DINÂMICA PARA CÁLCULO ---
+        instrucao_calculo = ""
+        if "graduação" in dados.turma.lower():
+            instrucao_calculo = """
+        [INSTRUÇÃO CRÍTICA PARA NÍVEL SUPERIOR]
+        A turma é de GRADUAÇÃO. É IMPERATIVO que a abordagem teórica e as atividades propostas utilizem formalismo de CÁLCULO DIFERENCIAL E INTEGRAL (derivadas e integrais) para explicar os fenômenos físicos, sempre que o tema permitir. Demonstre a profundidade acadêmica esperada para este nível.
+        A turma é de GRADUAÇÃO. É IMPERATIVO que a abordagem teórica e as atividades propostas utilizem formalismo de CÁLCULO DIFERENCIAL E INTEGRAL (derivadas e integrais) para explicar os fenômenos físicos, sempre que o tema permitir.
+        """
+
+        # --- INSTRUÇÃO DINÂMICA PARA O TOM PEDAGÓGICO ---
+        tons_pedagogicos = {
+            "conceitual": """
+            [TOM PEDAGÓGICO: Conceitual e Intuitivo]
+            Sua resposta deve focar na explicação física dos fenômenos por trás das fórmulas. Use analogias do cotidiano, intuição e visualização gráfica, evitando formalismo matemático pesado. O objetivo é construir a base conceitual do aluno.
+            """,
+            "analitico": """
+            [TOM PEDAGÓGICO: Rigoroso e Analítico]
+            Sua resposta deve ter um alto nível acadêmico, formal e técnico. Utilize a linguagem do cálculo diferencial e integral, vetores e deduções matemáticas elegantes em LaTeX para demonstrar o rigor esperado em turmas avançadas.
+            """,
+            "numerico": """
+            [TOM PEDAGÓGICO: Prático e Numérico]
+            Sua resposta deve focar menos na teoria textual e mais em números e aplicações. Estruture a aula com base em exemplos numéricos reais, passo a passo de resolução de problemas, manipulação de unidades e dados práticos.
+            """,
+            "experimental": """
+            [TOM PEDAGÓGICO: Experimental e Construtivista]
+            Sua resposta deve ser voltada para a "mão na massa". Proponha roteiros de experimentos, projetos de laboratório, sugestões de coleta de dados e perguntas reflexivas para que os alunos investiguem o fenômeno ativamente.
+            """,
+            "historico": """
+            [TOM PEDAGÓGICO: Histórico e Filosófico]
+            Sua resposta deve adotar um tom narrativo e envolvente. Explique o contexto histórico da descoberta, os debates científicos da época e como a ciência evoluiu até o entendimento atual do tema.
+            """
+        }
+        instrucao_tom = tons_pedagogicos.get(dados.tom_abordagem, "")
+
+
         # 3. Prompt Unificado para o Gemini
         prompt = f"""
-        [PAPEL] Você é um especialista em Ensino de Física com vasta experiência em didática, metodologias ativas, IA e atividades experimentais.
-        Sua tarefa é retornar uma Estratégia Pedagógica no formato JSON.
-        Regra Absoluta: Baseie o plano EXCLUSIVAMENTE nos documentos fornecidos na base de conhecimento.
-        Contexto - O professor precisa de uma estratégia pedagógica baseada estritamente nestes materiais de referência do nosso banco de dados:
-        TAREFA - Elabore uma estratégia pedagógica completa e engajadora para ensinar o tema "{dados.tema}", estruturando a resposta com objetivos, materiais, introdução, teoria, atividade prática e avaliação.
+        [PAPEL] 
+         Você é um Especialista em Ensino de Física de nível superior, atuando como um Assistente Pedagógico sênior para cursos de Física entre o nono ano da educação básica e o terceiro ano do ensino superior.
+        Sua identidade combina:
+        - Vasta experiência em didática e transposição de conceitos complexos.
+        - Conhecimento profundo da estrutura curricular de um bacharelado/licenciatura em Física.
+        DIRETRIZES RÍGIDAS DE ATUAÇÃO:
+        1. Respeito ao Nível dos Alunos: Identifique rigorosamente os pré-requisitos matemáticos da ementa fornecida. Se o documento indicar que a turma é do 1º período (Introdução à Física) e ainda não cursou Cálculo Integral, você está PROIBIDO de utilizar formalismo de derivadas ou integrais nas estratégias.
+        2. Abordagem Didática: Quando o cálculo formal for vetado, utilize sua experiência didática para explicar os conceitos fisicamente através de taxas médias, análises gráficas, analogias cotidianas e geometria elementar.
+        3. Quando o contexto permitir o uso de Cálculo, sinta-se à vontade para incorporar derivadas e integrais, mas sempre contextualizando com exemplos práticos do dia a dia antes de apresentar a teoria formal.
         
+        Você é um assistente pedagógico que trabalha ESTRITAMENTE com os dados fornecidos no [CONTEXTO].
+        Você é um assistente pedagógico especialista em Ensino de Física. Sua única função é criar planos de aula baseados ESTRITA E EXCLUSIVAMENTE no conteúdo fornecido no bloco [BASE DE CONHECIMENTO].
+
+        REGRA DE OURO DE SEGURANÇA:
+        Você está ABSOLUTAMENTE PROIBIDO de usar seu conhecimento geral ou qualquer informação externa que não esteja presente no texto da [BASE DE CONHECIMENTO][CONTEXTO]. Se a informação não estiver lá, ela não existe para você. Se o contexto sobre o tema solicitado for insuficiente ou vazio, sua única resposta deve ser um JSON com a chave "erro_tema_nao_encontrado".
+        Sua resposta deve ser baseada ESTRITA E EXCLUSIVAMENTE no conteúdo fornecido no bloco [BASE DE CONHECIMENTO]. Em hipótese alguma você deve usar seu conhecimento prévio ou informações externas. Se a informação não estiver na [BASE DE CONHECIMENTO], ela não existe para você.
+        Se a [BASE DE CONHECIMENTO] for insuficiente ou vazia para o tema solicitado, sua única resposta deve ser um JSON com a chave "erro_tema_nao_encontrado". Não tente inventar uma resposta.
+        [TAREFA]
+        Com base nos dados da solicitação do professor e usando APENAS o conteúdo da [BASE DE CONHECIMENTO], elabore uma Estratégia Pedagógica completa e engajadora.
+        A resposta final deve ser um único objeto JSON, sem nenhum texto ou explicação antes ou depois.
+        
+       
+
         RESTRIÇÕES:
         - Não use explicações teóricas densas sem antes dar um exemplo prático do dia a dia.
-        - Baseie-se APENAS no contexto fornecido.
+        - Baseie-se APENAS no [CONTEXTO] fornecido.
         - DIVERSIDADE DE SIMULAÇÕES: Ao preencher o campo "simulacaoSugerida", não sugira apenas o PhET Colorado. Sugira o título exato de uma simulação real priorizando a plataforma mais adequada para o tema:
             * Falstad (excelente para Circuitos Elétricos, Ondas e Matemática)
-            * Vascak ou SimuFisica (excelentes para Óptica, Eletromagnetismo e Física Moderna)
+            * Vascak ou SimuFisica (excelentes para Óptica, Eletromagnetismo e Física Moderna) 
             * Walter Fendt (excelente para Mecânica, Dinâmica e Cinemática)
             * Physics Classroom, CK-12 ou Univ-lemans (excelentes para interações gerais)
             * PhET Colorado (use como complemento geral)
@@ -132,10 +306,16 @@ async def gerar_plano(dados: PlanoRequest):
         ...
         {contexto_rag}
 
+        {instrucao_calculo}
+
+        {instrucao_tom}
+
         [DADOS DA SOLICITAÇÃO]
         - TEMA: {dados.tema}
+        - FENÔMENO ESPECÍFICO: {dados.fenomeno or 'Não especificado'}
         - TURMA: {dados.turma}
         - RECURSOS: {", ".join(dados.recursos)}
+        - OBSERVAÇÕES DO PROFESSOR: {dados.observacoes if dados.observacoes else "Nenhuma observação adicional fornecida."}
 
         [REGRAS DE FORMATAÇÃO]
         1. **Estrutura JSON:** O JSON deve seguir exatamente esta estrutura, preenchendo TODOS os campos.
@@ -164,8 +344,9 @@ async def gerar_plano(dados: PlanoRequest):
           }}
         }}
         
-        2. **Fórmulas LaTeX (Regra Crítica):** Para TODAS as fórmulas, use a sintaxe LaTeX dentro de delimitadores de cifrão. Use um cifrão de cada lado para fórmulas no meio do texto (ex: $v_m = \frac{{\Delta s}}{{\Delta t}}$) e dois cifrões para fórmulas em uma linha separada (ex: $$E=mc^2$$). Esta regra é essencial para a renderização correta no frontend.
+        2. **Fórmulas LaTeX (Regra Crítica):** Ao usar qualquer fórmula da [BASE DE CONHECIMENTO], mantenha a sintaxe LaTeX original (ex: $v_m = \frac{{\Delta s}}{{\Delta t}}$ ou $$E=mc^2$$). Esta regra é essencial para a renderização correta no frontend.
         """
+
         print("🧠 IA gerando plano final...")
         model = genai.GenerativeModel('gemini-2.0-flash') # Using the latest flash model
         resposta = await model.generate_content_async(
@@ -173,8 +354,14 @@ async def gerar_plano(dados: PlanoRequest):
             generation_config={"response_mime_type": "application/json"}
         )
         
-        # Pré-processa o texto da resposta para escapar backslashes do LaTeX
-        processed_text = re.sub(r'(?<!\\)\\(?!["\\/bfnrtu])', r'\\\\', resposta.text)
+        # --- CORREÇÃO CIRÚRGICA PARA LATEX ---
+        # A resposta da IA (resposta.text) é uma string JSON. Fórmulas LaTeX (ex: "\frac")
+        # podem conter sequências como `\f` que são interpretadas como caracteres de escape
+        # inválidos pelo `json.loads`. A solução é usar uma expressão regular para
+        # encontrar e escapar apenas as barras invertidas que não fazem parte de uma
+        # sequência de escape JSON válida (como \n, \t, \", \\).
+        # Isso preserva a integridade das fórmulas LaTeX.
+        processed_text = re.sub(r'(?<!\\)\\(?![/bfnrt"\\])', r'\\\\', resposta.text)
         plano_json = json.loads(processed_text)
         
         # --- CORREÇÃO DO BUG (A trava de segurança) ---
@@ -239,14 +426,19 @@ async def gerar_plano(dados: PlanoRequest):
             
             # 3. Executa a busca exata no DuckDuckGo
             try:
-                with DDGS() as ddgs:
-                    resultados_sim = list(ddgs.text(query_sim, max_results=3))
-                    
-                    if resultados_sim:
-                        # Captura o primeiríssimo link retornado dentro daquele site
-                        link_final = resultados_sim[0].get('href', '')
-                        print(f"🌟 LINK DIRETO EXTRAÍDO COM SUCESSO: {link_final}")
+                # --- OTIMIZAÇÃO DE PERFORMANCE ---
+                # Usando a versão assíncrona (atext) da biblioteca duckduckgo-search.
+                # Isso evita o bloqueio do event loop.
+                print(f"⚡️ Executando busca assíncrona no DuckDuckGo: '{query_sim}'")
+                ddgs = DDGS()
+                resultados_sim = await ddgs.atext(query_sim, max_results=3)
+                
+                if resultados_sim:
+                    # Captura o primeiríssimo link retornado dentro daquele site
+                    link_final = resultados_sim[0].get('href', '')
+                    print(f"🌟 LINK DIRETO EXTRAÍDO COM SUCESSO: {link_final}")
             except Exception as e:
+                link_final = None # Garante que link_final seja None em caso de erro
                 print(f"⚠️ DuckDuckGo recusou a conexão ou deu timeout: {e}")
 
             # 4. Proteção Extrema: Se o DDGS falhar por bloqueio de IP/Bot, usa o diretório do site
