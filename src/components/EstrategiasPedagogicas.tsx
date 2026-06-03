@@ -19,6 +19,11 @@ export interface simulacaoSugerida {
   url: string;
 }
 
+export interface AtividadeIA {
+  titulo: string;
+  descricao: string;
+}
+
 export interface videoYoutube {
   title: string;
   channel: string;
@@ -135,6 +140,10 @@ export default function EstrategiasPedagogicas() {
   const [lessonPlan, setLessonPlan] = useState<LessonPlanResponse | null>(null);
 
   // --- FUNÇÕES DE LÓGICA ---
+  const handleReset = () => {
+    setStep('form');
+    setLessonPlan(null);
+  };
   const toggleIT = (item: string) => {
     if (item === "Nenhum recurso digital") {
       setSelectedIT(selectedIT.includes(item) ? [] : [item]);
@@ -233,13 +242,13 @@ export default function EstrategiasPedagogicas() {
             <BookOpen className="w-6 h-6 text-indigo-300" />
           </div>
           <div>
-            <h2 className="text-2xl font-black text-white tracking-tight">Estratégias Pedagógicas</h2>
+            <h2 className="text-2xl font-black text-white tracking-tight">Estratégias Pedagógicas 123</h2>
             <p className="text-indigo-300 text-sm font-medium">Configure a turma e gere sua Estratégia Pedagógica com IA</p>
           </div>
         </div>
         {(step === 'result' || step === 'loading') && (
           <button 
-            onClick={() => setStep('form')}
+            onClick={handleReset}
             className="text-indigo-200 hover:text-white text-sm font-bold bg-indigo-800 px-4 py-2 rounded-lg transition-colors"
           >
             ← Voltar e Editar
@@ -451,7 +460,7 @@ export default function EstrategiasPedagogicas() {
               exerciseList={null}
               generatedImageUrl={null}
               generatedAnimationSvg={null}
-              onReset={() => setStep('form')}
+              onReset={handleReset}
               onGenerateImage={async () => {}}
               onGenerateAnimation={async () => {}}
               exerciseImages={{}}

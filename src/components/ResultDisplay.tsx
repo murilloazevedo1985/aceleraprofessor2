@@ -1,19 +1,24 @@
 import React, { useState } from 'react';
 import { LessonPlanResponse, ExerciseListResponse, WorkflowMode, Difficulty } from '../types';
-import { Clock, Target, Box, CheckCircle, ArrowLeft, Download, Smartphone, Youtube, Star, Image as ImageIcon, ExternalLink, Eye, EyeOff, Book, Library, AlertCircle, Code, Copy, Check, PlayCircle, Video, Search } from 'lucide-react';
+import { Clock, Target, Box, CheckCircle, ArrowLeft, Download, Smartphone, Youtube, Star, Image as ImageIcon, ExternalLink, Eye, EyeOff, Book, Library, AlertCircle, Code, Copy, Check, PlayCircle, Video, Search, Sparkles } from 'lucide-react';
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
+import { LessonStep } from './EstrategiasPedagogicas';
 
 // --- COMPONENTES AUXILIARES ---
 // 1. Defina as regras APENAS para o cartãozinho
 interface MediaCardProps {
   tipo: "simulacao" | "youtube";
   titulo: string;
-  url?: string;
+}
+
+interface AtividadeIA {
+  titulo: string;
+  descricao: string;
 }
 
 // 2. Aplique a regra na função do cartão
-const MediaCard = ({ tipo, titulo }: MediaCardProps) => {
+const MediaCard = ({ tipo, titulo, url }: MediaCardProps & { url?: string }) => {
   const isSimulacao = tipo === 'simulacao';
 
   // Segurança: se a IA não gerou título, o card não aparece
@@ -21,29 +26,29 @@ const MediaCard = ({ tipo, titulo }: MediaCardProps) => {
 
   // Lógica de Busca Dinâmica
   const termoDeBusca = encodeURIComponent(titulo);
-  let urlBusca: string;
   let rotulo: string;
   let icone: React.ReactNode;
   let corFundo: string;
   let corTexto: string;
   let corBotao: string;
+  let urlFinal: string;
 
   if (isSimulacao) {
-    // Busca no Google focando nos melhores sites de simulação
-    urlBusca = `https://www.google.com/search?q=${termoDeBusca}+site:phet.colorado.edu+OR+site:walter-fendt.de+OR+site:vascak.cz`;
     rotulo = 'Laboratório Virtual';
     icone = <Smartphone className="w-5 h-5" />;
     corFundo = 'bg-indigo-50 border-indigo-200';
     corTexto = 'text-indigo-800';
     corBotao = 'bg-indigo-600 hover:bg-indigo-700';
+    // Se uma URL específica foi fornecida, use-a. Senão, crie uma URL de busca no Google.
+    urlFinal = url || `https://www.google.com/search?q=${termoDeBusca}+site:phet.colorado.edu+OR+site:walter-fendt.de+OR+site:vascak.cz`;
   } else {
-    // Busca diretamente no YouTube
-    urlBusca = `https://www.youtube.com/results?search_query=${termoDeBusca}`;
     rotulo = 'Vídeo Sugerido';
     icone = <Youtube className="w-5 h-5" />;
     corFundo = 'bg-red-50 border-red-200';
     corTexto = 'text-red-800';
     corBotao = 'bg-red-600 hover:bg-red-700';
+    // Para vídeos, sempre buscamos no YouTube com o título.
+    urlFinal = `https://www.youtube.com/results?search_query=${termoDeBusca}`;
   }
 
   return (
@@ -58,7 +63,7 @@ const MediaCard = ({ tipo, titulo }: MediaCardProps) => {
       </p>
       
       <a 
-        href={urlBusca} 
+        href={urlFinal} 
         target="_blank" 
         rel="noopener noreferrer"
         className={`mt-auto text-center ${corBotao} text-white font-bold py-3 px-4 rounded-xl transition-colors flex items-center justify-center gap-2 shadow-md`}
@@ -213,7 +218,9 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({
   // Garantindo compatibilidade de nomes com traduções possíveis do Gemini
   const safeApp = lessonPlan?.suggestedApp || (lessonPlan as any)?.aplicativoSugerido || (lessonPlan as any)?.aplicativo;
   const safeVideo = lessonPlan?.youtubeVideo || (lessonPlan as any)?.videoYoutube || (lessonPlan as any)?.video;
-
+  // ✅ CORREÇÃO: Adicionando a mesma lógica para encontrar as atividades de IA
+  const safeAtividadesIA = lessonPlan?.atividadesIA || (lessonPlan as any)?.atividades_ia || [];
+  
   if (hasError) {
     return (
       <div className="max-w-2xl mx-auto mt-20 animate-in fade-in zoom-in duration-500">
@@ -251,9 +258,6 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({
                  <span className="px-3 py-1 bg-slate-100 text-slate-600 rounded-lg text-xs font-black uppercase tracking-wider">Fisica Computacional Java</span>
                </div>
             </div>
-            <div className="flex items-center text-slate-500 mt-4 md:mt-0 bg-slate-50 px-5 py-3 rounded-2xl border border-slate-100">
-              <Clock className="w-5 h-5 mr-3 text-indigo-500" /> <span className="font-bold text-lg">{plan.duration}</span>
-            </div>
           </div>
           
           <div className="grid md:grid-cols-2 gap-8 mt-10">
@@ -283,6 +287,22 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({
                 ))}
               </ul>
             </div>
+            {/* NOVO CARD - COMPETÊNCIAS BNCC */}
+            {Array.isArray(plan.competenciasBnccAplicadas) && plan.competenciasBnccAplicadas.length > 0 && (
+              <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 md:col-span-2">
+                <h3 className="flex items-center text-sm font-black text-slate-400 mb-4 uppercase tracking-widest">
+                  <CheckCircle className="w-5 h-5 mr-2 text-indigo-500" /> Competências BNCC Aplicadas
+                </h3>
+                <ul className="space-y-3">
+                  {plan.competenciasBnccAplicadas.map((comp: string, idx: number) => (
+                    <li key={idx} className="whitespace-pre-wrap text-slate-700 flex gap-3 items-start">
+                      <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full mt-2 flex-shrink-0" />
+                      <LatexText text={comp} />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -312,69 +332,79 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({
         </h2>
         <div className="space-y-12">
           {(plan.steps || []).map((step, index) => (
-            <div key={index} className="flex gap-10 group print:break-inside-avoid">
-                <div className="w-24 flex-shrink-0 flex flex-col items-center">
-                  <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-white font-black text-lg shadow-lg group-hover:scale-110 transition-transform">{step.time}</div>
-                  <div className="w-1 h-full bg-slate-100 mt-4 rounded-full" />
-                </div>
-                <div className="flex-grow bg-slate-50 rounded-[2rem] p-8 border border-slate-100 group-hover:border-indigo-200 transition-colors">
-                  <h3 className="text-2xl font-black text-slate-800 mb-4">{step.title}</h3>
-                  <div className="whitespace-pre-wrap text-slate-600 text-lg mb-6 leading-relaxed">
-                    <LatexText text={step.description} />
-                  </div>
-                  
-                  {step.javaSnippet && (
-                    <CodeBlock code={step.javaSnippet} label={`Fragmento Java: ${step.title}`} />
-                  )}
-
-                  <div className="grid md:grid-cols-2 gap-6 mt-6">
-                    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-                      <span className="block text-xs font-black text-indigo-500 mb-2 uppercase">Ação do Docente</span>
-                      <p className="text-slate-700 text-sm font-medium">{step.teacherRole}</p>
-                    </div>
-                    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-                      <span className="block text-xs font-black text-emerald-500 mb-2 uppercase">Ação do Estudante</span>
-                      <p className="text-slate-700 text-sm font-medium">{step.studentRole}</p>
-                    </div>
+            <div key={index} className="space-y-4 print:break-inside-avoid">
+              <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100 group-hover:border-indigo-200 transition-colors">
+                <div className="mb-4">
+                  <div className="bg-indigo-50 p-4 rounded-xl border-2 border-indigo-200 shadow-md">
+                    <span className="block text-xs font-black text-indigo-700 mb-1 uppercase">Estratégia Pedagógica</span>
+                    <p className="text-slate-800 text-base font-semibold leading-relaxed">
+                      <LatexText text={step.teacherRole} />
+                    </p>
                   </div>
                 </div>
+                <h3 className="text-xl font-black text-slate-800 mb-3 pt-4 border-t border-slate-200">{step.title}</h3>
+                <div className="whitespace-pre-wrap text-slate-600 text-base mb-4 leading-relaxed">
+                  <LatexText text={step.description} />
+                </div>
+                {step.javaSnippet && (
+                  <CodeBlock code={step.javaSnippet} label={`Fragmento Java: ${step.title}`} />
+                )}
+              </div>
             </div>
           ))}
         </div>
       </div>
 
       {/* SESSÃO DE RECURSOS MULTIMÍDIA NOVA (PhET e YouTube) */}
-      {(plan.simulacaoSugerida?.titulo || plan.videoYoutube?.titulo) && (
+      {(plan.simulacaoSugerida?.titulo || safeVideo?.titulo) && (
         <div className="mt-16 pt-10 border-t-2 border-slate-100">
           <h3 className="text-2xl font-black text-slate-800 mb-8 flex items-center gap-2">
             🚀 Recursos Multimídia Recomendados
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             
-            {/* Lógica da Simulação com Link Exato do Backend */}
-            {plan.simulacaoSugerida?.url && (
-              <a 
-                href={plan.simulacaoSugerida.url} 
-                target="_blank" 
-                rel="noopener noreferrer"
-              >
-                <MediaCard 
-                  tipo="simulacao" 
-                  titulo={plan.simulacaoSugerida.titulo} 
-                />
-              </a>
+            {plan.simulacaoSugerida?.titulo && (
+              <MediaCard 
+                tipo="simulacao" 
+                titulo={plan.simulacaoSugerida.titulo} 
+                url={plan.simulacaoSugerida.url} 
+              />
             )}
-            {/* Aqui continuaria a lógica do seu vídeo do YouTube, se houver... */}
-            {plan.videoYoutube?.titulo && (
+            {safeVideo?.titulo && (
               <MediaCard 
                 tipo="youtube" 
-                titulo={plan.videoYoutube.titulo} 
-                url={plan.videoYoutube.url} 
+                titulo={safeVideo.titulo} 
               />
             )}
           </div>
         </div>
       )}
+
+      {/* NOVA SEÇÃO: SUGESTÕES DE ATIVIDADES COM IA */}
+      {Array.isArray(safeAtividadesIA) && safeAtividadesIA.length > 0 && (
+        <div className="mt-16 pt-10 border-t-2 border-slate-100">
+          <h3 className="text-2xl font-black text-slate-800 mb-8 flex items-center gap-3">
+            <Sparkles className="w-7 h-7 text-violet-500" />
+            Atividades com Inteligência Artificial
+          </h3>
+          <div className="space-y-6">
+            {safeAtividadesIA.map((atividad:AtividadeIA, index: number) => (
+              <div key={index} className="bg-white border-2 border-slate-200 p-8 rounded-2xl shadow-lg transition-all hover:shadow-violet-200 hover:border-violet-300 group">
+                <div className="flex items-start gap-4">
+                  <div className="p-3 bg-violet-100 rounded-xl border border-violet-200 group-hover:bg-violet-600 group-hover:text-white transition-colors">
+                     <Sparkles className="w-6 h-6 text-violet-600 group-hover:text-white transition-colors" />
+                  </div>
+                  <div>
+                    <h4 className="text-xl font-black text-slate-800 mb-2 group-hover:text-violet-700 transition-colors">{atividad.titulo}</h4>
+                    <p className="text-slate-600 leading-relaxed">{atividad.descricao}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
     </div>
   );
 

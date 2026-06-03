@@ -88,7 +88,7 @@ def extrair_texto_de_pdf_com_visao(caminho_pdf):
     # Converte apenas as primeiras páginas ou o livro todo (cuidado com o limite de tokens)
     paginas = convert_from_path(caminho_pdf, dpi=150)
     
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    model = genai.GenerativeModel('gemini-2.5-flash')
     texto_completo_extraido = ""
     
     for i, pagina in enumerate(paginas):
@@ -113,6 +113,61 @@ def extrair_texto_de_pdf_com_visao(caminho_pdf):
         os.remove(caminho_imagem)
         
     return texto_completo_extraido
+
+def mapear_habilidades_por_assunto(tema_usuario: str) -> list[dict]:
+    """
+    Mapeia um tema de física para uma lista de dicionários contendo as habilidades da BNCC.
+    Retorna uma lista de dicionários ou uma lista vazia se não encontrar.
+    """
+    print(f"🗺️  Mapeando localmente o tema '{tema_usuario}' para habilidades da BNCC...")
+    tema_lower = tema_usuario.lower()
+
+     # Textos oficiais e integrais das habilidades
+    habilidades_bncc = {
+        "EM13CNT101": "ANÁLISE E CONSERVAÇÃO: (EM13CNT101) Analisar e representar, com ou sem o uso de dispositivos e de aplicativos digitais específicos, as transformações e conservações em sistemas que envolvam quantidade de matéria, de energia e de movimento para realizar previsões sobre seus comportamentos em situações cotidianas e em processos produtivos que priorizem o desenvolvimento sustentável, o uso consciente dos recursos naturais e a preservação da vida em todas as suas formas.",
+        "EM13CNT102": "SISTEMAS TÉRMICOS: (EM13CNT102) Realizar previsões, avaliar intervenções e/ou construir protótipos de sistemas térmicos que visem à sustentabilidade, considerando sua composição e os efeitos das variáveis termodinâmicas sobre seu funcionamento, considerando também o uso de tecnologias digitais que auxiliem no cálculo de estimativas e no apoio à construção dos protótipos.",
+        "EM13CNT103": "RADIAÇÕES E ONDAS: (EM13CNT103) Utilizar o conhecimento sobre as radiações e suas origens para avaliar as potencialidades e os riscos de sua aplicação em equipamentos de uso cotidiano, na saúde, no ambiente e na geração de energia elétrica e/ou propor alternativas de solução com base em critérios de sustentabilidade, consumo consciente e preservação da vida.",
+        "EM13CNT104": "ELETROMAGNETISMO E DISPOSITIVOS: (EM13CNT104) Realizar previsões qualitativas e quantitativas sobre o funcionamento de geradores, motores elétricos e seus componentes, bobinas, transformadores, pilhas, baterias e dispositivos eletrônicos, com base na análise dos processos de transformação e condução de energia envolvidos, propondo ações que visem a sustentabilidade pelo consumo consciente e/ou uso de fontes renováveis de energia.",
+        "EM13CNT204": "MOVIMENTOS E GRAVITAÇÃO: (EM13CNT204) Elaborar explicações, previsões e cálculos a respeito dos movimentos de objetos na Terra, no Sistema Solar e no Universo com base na análise das interações gravitacionais, com ou sem o uso de dispositivos e aplicativos digitais (como softwares de simulação e de realidade virtual, entre outros)."
+        }
+        # Árvore de regras de mapeamento
+    regras = {
+        "MECÂNICA": {
+                "keywords": ["mru", "mruv", "queda livre", "lançamento vertical", "lançamento oblíquo", "mcu", "leis de newton", "atrito", "plano inclinado", "blocos", "força centrípeta", "trabalho", "energia cinética", "energia potencial", "conservativos", "dissipativos", "potência", "rendimento", "impulso", "quantidade de movimento", "colisões", "centro de massa", "equilíbrio", "torque", "alavancas", "roldanas", "pressão", "densidade", "stevin", "pascal", "arquimedes", "empuxo", "kepler", "gravitação", "campo gravitacional", "satélites", "calendário", "órbitas", "astronomia", "mecânica", "cinemática", "dinâmica", "hidrostática"],
+            "codigos": ["EM13CNT204", "EM13CNT101"]
+        },
+        "TERMOLOGIA": {
+            "keywords": ["escalas termométricas", "celsius", "fahrenheit", "kelvin", "equilíbrio térmico", "termômetro", "calor sensível", "calor latente", "trocas de calor", "calorímetro", "diagramas de fase", "condução", "convecção", "irradiação", "clapeyron", "pv=nrt", "transformações gasosas", "isotérmica", "isobárica", "isocórica", "mistura de gases", "1ª lei da termodinâmica", "energia interna", "2ª lei da termodinâmica", "máquinas térmicas", "entropia", "ciclo de carnot", "calor", "termologia", "termodinâmica"],
+            "codigos": ["EM13CNT102"]
+        },
+        "ÓPTICA E ONDULATÓRIA": {
+            "keywords": ["óptica geométrica", "reflexão", "espelhos", "refração", "snell-descartes", "lentes", "fenômenos ondulatórios", "difração", "interferência", "polarização", "acústica", "fontes sonoras", "altura", "timbre", "intensidade", "velocidade do som", "eco", "reverberação", "ressonância", "efeito doppler", "ondas", "óptica", "ondulatória"],
+            "codigos": ["EM13CNT103"]
+        },
+        "ELETROMAGNETISMO": {
+            "keywords": ["carga elétrica", "eletrização", "coulomb", "campo elétrico", "potencial elétrico", "corrente elétrica", "leis de ohm", "circuitos", "série", "paralelo", "misto", "potência elétrica", "geradores", "receptores", "kirchhoff", "ímãs", "campo magnético", "força magnética", "solenoide", "fluxo magnético", "faraday-lenz", "transformadores", "motores elétricos", "arduino", "eletrônica", "circuitos elétricos", "eletromagnetismo", "eletrostática", "eletrodinâmica"],
+            "codigos": ["EM13CNT104"]
+        },
+        "FÍSICA MODERNA": {
+            "keywords": ["relatividade", "einstein", "dilatação do tempo", "contração do espaço", "e=mc²", "quântica", "corpo negro", "planck", "efeito fotoelétrico", "bohr", "dualidade", "física nuclear", "radioatividade", "decaimento", "alfa", "beta", "gama", "meia-vida", "fissão", "fusão nuclear", "modelo padrão", "quarks", "léptons", "bóson de higgs", "forças fundamentais", "física moderna"],
+            "codigos": ["EM13CNT103", "EM13CNT204"]
+        }
+    }
+
+    for categoria, data in regras.items():
+        # any() é uma forma eficiente de verificar se qualquer keyword está no tema
+        if any(keyword in tema_lower for keyword in data["keywords"]):
+            print(f"✅ Tema encontrado na categoria '{categoria}'. Mapeando para {data['codigos']}.")
+            
+            # Monta a lista de dicionários com os dados completos
+            resultado = [
+                {"codigo": codigo, "texto": habilidades_bncc[codigo]}
+                for codigo in data["codigos"]
+            ]
+            return resultado
+
+    print("⚠️ Tema não encontrado no mapa local. O sistema usará a busca vetorial como fallback.")
+    return []
 
 @app.post("/extrair-latex-imagem")
 async def extrair_latex_imagem(file: UploadFile = File(...)):
@@ -145,8 +200,11 @@ async def extrair_latex_imagem(file: UploadFile = File(...)):
         """
 
         # 4. Gera o conteúdo usando o modelo multimodal
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        response = await model.generate_content_async([prompt, imagem_pagina])
+        model = genai.GenerativeModel('gemini-2.5-flash')
+        response = await model.generate_content_async(
+            [prompt, imagem_pagina],
+            generation_config={"temperature": 0.0}
+        )
 
         print("✅ Conteúdo extraído com sucesso!")
         return {"texto_extraido": response.text}
@@ -160,115 +218,112 @@ async def gerar_plano(dados: PlanoRequest):
     try:
         # Combina tema e fenômeno para uma busca mais precisa
         texto_busca = f"{dados.tema} - {dados.fenomeno}" if dados.fenomeno else dados.tema
-        print(f"\n🚀 Buscando por: '{texto_busca}' no Pinecone (Nuvem)...")
-        
-        # 1. Transforma o tema do professor em vetor
-        res_emb = await genai.embed_content_async(
-            model="models/gemini-embedding-2", # O mesmo que usamos na fábrica
+        print(f"\n🚀 Iniciando geração de plano para: '{texto_busca}'...")
+
+        # --- OTIMIZAÇÃO: ARQUITETURA HÍBRIDA ---
+        # 1. MAPEAMENTO LOCAL DA BNCC (Rápido e Gratuito)
+        habilidades_mapeadas = mapear_habilidades_por_assunto(dados.tema)
+        contexto_bncc_rag = ""
+
+        if habilidades_mapeadas:
+            # Extrai apenas os textos para o prompt, mas mantém a estrutura completa para outros usos
+            textos_bncc = [h['texto'] for h in habilidades_mapeadas]
+            contexto_bncc_rag = "\n\n---\n\n".join(textos_bncc)
+        else:
+            # 2. FALLBACK: BUSCA VETORIAL NA NUVEM (Se o mapa local falhar)
+            print("   - Executando busca vetorial de fallback para BNCC no Pinecone...")
+            etapa_ensino_bncc = "ensino médio" if "médio" in dados.turma.lower() else "ensino fundamental"
+            texto_busca_bncc = f"habilidade da bncc para o {etapa_ensino_bncc} sobre {texto_busca}"
+            
+            res_emb_bncc = await genai.embed_content_async(
+                model="models/gemini-embedding-2",
+                content=texto_busca_bncc,
+                task_type="retrieval_query"
+            )
+            vetor_busca_bncc = res_emb_bncc['embedding']
+
+            etapa_filtro = "Ensino Médio" if "médio" in dados.turma.lower() else "Ensino Fundamental"
+            resultados_bncc = await run_in_threadpool(
+                index.query,
+                vector=vetor_busca_bncc,
+                top_k=3,
+                include_metadata=True,
+                filter={"$and": [{"tipo": {"$eq": "diretriz_bncc"}}, {"etapa": {"$eq": etapa_filtro}}]}
+            )
+
+            # Processa os resultados do fallback
+            textos_bncc_fallback = []
+            if resultados_bncc['matches']:
+                NOTA_DE_CORTE_BNCC = 0.4
+                for match in resultados_bncc['matches']:
+                    if match['score'] >= NOTA_DE_CORTE_BNCC:
+                        textos_bncc_fallback.append(match['metadata']['texto'])
+                contexto_bncc_rag = "\n\n---\n\n".join(textos_bncc_fallback)
+                print(f"   - Fallback encontrou {len(textos_bncc_fallback)} habilidade(s) relevante(s).")
+            else:
+                print("   - Fallback da BNCC não encontrou resultados.")
+
+        # 3. BUSCA DE CONTEÚDO TÉCNICO (Sempre via Pinecone)
+        print("   - Buscando conteúdo de Física no Pinecone...")
+        res_emb_fisica = await genai.embed_content_async(
+            model="models/gemini-embedding-2",
             content=texto_busca,
             task_type="retrieval_query"
         )
-        vetor_pergunta = res_emb['embedding']
+        vetor_busca_fisica = res_emb_fisica['embedding']
 
-        # 2. --- OTIMIZAÇÃO DE PERFORMANCE ---
-        # A biblioteca do Pinecone é síncrona (bloqueante).
-        # Executamos a consulta em uma thread separada para não bloquear o servidor.
-        print("⚡️ Executando a busca no Pinecone em uma thread separada...")
-        resultados = await run_in_threadpool(
+        resultados_fisica = await run_in_threadpool(
             index.query,
-            vector=vetor_pergunta,
+            vector=vetor_busca_fisica,
             top_k=5,
-            include_metadata=True
+            include_metadata=True,
+            filter={"tipo": {"$eq": "conteudo_fisica"}}
         )
-        print("\n🔍 --- DEBUG: CONTEÚDO RECUPERADO DO PINECONE ---")
-        if not resultados['matches']:
-            print("⚠️ O Pinecone retornou VAZIO! Nada foi encontrado no banco.")
-        else:
-                for i, match in enumerate(resultados['matches']):
-                    print(f"Trecho {i+1} (Fonte: {match['metadata'].get('fonte')}):")
-                print(f"Texto: {match['metadata'].get('texto')[:200]}...") # Mostra os primeiros 200 caracteres
-                print("------------------------------------------------\n")
-        # Extrai os textos e as pontuações (scores)
-                textos_encontrados = [match['metadata']['texto'] for match in resultados['matches']]
-                scores = [match['score'] for match in resultados['matches']]
 
-        print(f"🔍 Encontrados {len(textos_encontrados)} trechos.")
-        print(f"📏 Scores de similaridade: {scores}")
+        textos_fisica = [match['metadata']['texto'] for match in resultados_fisica.get('matches', [])]
+        scores = [match['score'] for match in resultados_fisica.get('matches', [])]
 
-        # --- NOVA BARREIRA DE FERRO ---
-        # No Pinecone (Cosine), quanto MAIOR o score, MAIS parecido é.
-        # 0.70 é uma excelente nota de corte para conteúdos de Física.
-        NOTA_DE_CORTE = 0.70 
-        
-        if not textos_encontrados or scores[0] < NOTA_DE_CORTE:
-            print("⛔ BLOQUEADO: Conteúdo não encontrado no material do Drive.")
+        # --- BARREIRA DE FERRO PRINCIPAL (FÍSICA) ---
+        NOTA_DE_CORTE_FISICA = 0.7
+        if not textos_fisica or scores[0] < NOTA_DE_CORTE_FISICA:
+            print("⛔ BLOQUEADO: Conteúdo de física não encontrado no material do Drive com similaridade suficiente.")
             return {"erro_tema_nao_encontrado": "Desculpe, mas este tema não consta no material didático da nossa base de dados."}
         
-        contexto_rag = "\n\n---\n\n".join(textos_encontrados)
+        contexto_fisica_rag = "\n\n---\n\n".join(textos_fisica)
+        print(f"   - Encontrados {len(textos_fisica)} trechos de Física com score máximo de {scores[0]:.4f}.")
 
-        # --- NOVA VALIDAÇÃO: O CONTEXTO SUPORTA O TOM PEDAGÓGICO? ---
+        # --- VALIDAÇÃO DO TOM (Permanece igual) ---
         def validar_contexto_para_tom(tom: str, contexto: str) -> bool:
-            """Verifica se o contexto tem informações mínimas para o tom."""
+            if not tom or not contexto: return True
             contexto_lower = contexto.lower()
-            if tom == "numerico":
-                # Procura por qualquer dígito no texto.
-                return bool(re.search(r'\d', contexto))
-            if tom == "experimental":
-                # Procura por palavras-chave relacionadas a experimentos.
-                palavras_chave = ["experimento", "laboratório", "prática", "coleta de dados", "montagem", "roteiro"]
-                return any(palavra in contexto_lower for palavra in palavras_chave)
-            if tom == "analitico":
-                # Procura por sintaxe LaTeX ($...$) ou palavras como derivada/integral.
-                return "$" in contexto or "derivada" in contexto_lower or "integral" in contexto_lower
-            if tom == "historico":
-                # Procura por anos (4 dígitos) ou palavras-chave históricas.
-                return bool(re.search(r'\b(1[5-9]\d{2}|20\d{2})\b', contexto)) or "século" in contexto_lower or "história" in contexto_lower
-            # Tom 'conceitual' é o padrão e geralmente é atendido por qualquer texto.
+            if tom == "numerico": return bool(re.search(r'\d', contexto))
+            if tom == "experimental": return any(p in contexto_lower for p in ["experimento", "laboratório", "prática", "coleta de dados"])
+            if tom == "analitico": return "$" in contexto or "derivada" in contexto_lower or "integral" in contexto_lower
+            if tom == "historico": return bool(re.search(r'\b(1[5-9]\d{2}|20\d{2})\b', contexto)) or "século" in contexto_lower
             return True
 
-        if not validar_contexto_para_tom(dados.tom_abordagem, contexto_rag):
+        if not validar_contexto_para_tom(dados.tom_abordagem, contexto_fisica_rag):
             print(f"⛔ BLOQUEADO: O contexto não tem informações para a abordagem '{dados.tom_abordagem}'.")
             return {"erro_tema_nao_encontrado": f"O material didático encontrado sobre o tema não possui informações suficientes para uma abordagem '{dados.tom_abordagem}'. Por favor, tente uma abordagem mais conceitual ou teórica."}
         
         print(f"✅ Contexto validado para a abordagem '{dados.tom_abordagem}'.")
 
-        # --- INSTRUÇÃO DINÂMICA PARA CÁLCULO ---
+        # --- INSTRUÇÕES DINÂMICAS PARA O PROMPT (Permanece igual) ---
         instrucao_calculo = ""
         if "graduação" in dados.turma.lower():
-            instrucao_calculo = """
-        [INSTRUÇÃO CRÍTICA PARA NÍVEL SUPERIOR]
-        A turma é de GRADUAÇÃO. É IMPERATIVO que a abordagem teórica e as atividades propostas utilizem formalismo de CÁLCULO DIFERENCIAL E INTEGRAL (derivadas e integrais) para explicar os fenômenos físicos, sempre que o tema permitir. Demonstre a profundidade acadêmica esperada para este nível.
-        A turma é de GRADUAÇÃO. É IMPERATIVO que a abordagem teórica e as atividades propostas utilizem formalismo de CÁLCULO DIFERENCIAL E INTEGRAL (derivadas e integrais) para explicar os fenômenos físicos, sempre que o tema permitir.
-        """
+            instrucao_calculo = "[INSTRUÇÃO CRÍTICA PARA NÍVEL SUPERIOR]\nA turma é de GRADUAÇÃO. É IMPERATIVO que a abordagem teórica e as atividades propostas utilizem formalismo de CÁLCULO DIFERENCIAL E INTEGRAL (derivadas e integrais) para explicar os fenômenos físicos, sempre que o tema permitir."
 
-        # --- INSTRUÇÃO DINÂMICA PARA O TOM PEDAGÓGICO ---
         tons_pedagogicos = {
-            "conceitual": """
-            [TOM PEDAGÓGICO: Conceitual e Intuitivo]
-            Sua resposta deve focar na explicação física dos fenômenos por trás das fórmulas. Use analogias do cotidiano, intuição e visualização gráfica, evitando formalismo matemático pesado. O objetivo é construir a base conceitual do aluno.
-            """,
-            "analitico": """
-            [TOM PEDAGÓGICO: Rigoroso e Analítico]
-            Sua resposta deve ter um alto nível acadêmico, formal e técnico. Utilize a linguagem do cálculo diferencial e integral, vetores e deduções matemáticas elegantes em LaTeX para demonstrar o rigor esperado em turmas avançadas.
-            """,
-            "numerico": """
-            [TOM PEDAGÓGICO: Prático e Numérico]
-            Sua resposta deve focar menos na teoria textual e mais em números e aplicações. Estruture a aula com base em exemplos numéricos reais, passo a passo de resolução de problemas, manipulação de unidades e dados práticos.
-            """,
-            "experimental": """
-            [TOM PEDAGÓGICO: Experimental e Construtivista]
-            Sua resposta deve ser voltada para a "mão na massa". Proponha roteiros de experimentos, projetos de laboratório, sugestões de coleta de dados e perguntas reflexivas para que os alunos investiguem o fenômeno ativamente.
-            """,
-            "historico": """
-            [TOM PEDAGÓGICO: Histórico e Filosófico]
-            Sua resposta deve adotar um tom narrativo e envolvente. Explique o contexto histórico da descoberta, os debates científicos da época e como a ciência evoluiu até o entendimento atual do tema.
-            """
+            "conceitual": "[TOM PEDAGÓGICO: Conceitual e Intuitivo]\nSua resposta deve focar na explicação física dos fenômenos por trás das fórmulas. Use analogias do cotidiano, intuição e visualização gráfica, evitando formalismo matemático pesado.",
+            "analitico": "[TOM PEDAGÓGICO: Rigoroso e Analítico]\nSua resposta deve ter um alto nível acadêmico, formal e técnico. Utilize a linguagem do cálculo diferencial e integral, vetores e deduções matemáticas elegantes em LaTeX.",
+            "numerico": "[TOM PEDAGÓGICO: Prático e Numérico]\nSua resposta deve focar menos na teoria textual e mais em números e aplicações. Estruture a aula com base em exemplos numéricos reais e passo a passo de resolução de problemas.",
+            "experimental": "[TOM PEDAGÓGICO: Experimental e Construtivista]\nSua resposta deve ser voltada para a 'mão na massa'. Proponha roteiros de experimentos, projetos de laboratório e sugestões de coleta de dados.",
+            "historico": "[TOM PEDAGÓGICO: Histórico e Filosófico]\nSua resposta deve adotar um tom narrativo. Explique o contexto histórico da descoberta, os debates científicos da época e como a ciência evoluiu."
         }
         instrucao_tom = tons_pedagogicos.get(dados.tom_abordagem, "")
 
-
-        # 3. Prompt Unificado para o Gemini
-        prompt = f"""
+        # 4. Prompt Unificado para o Gemini
+        prompt = rf"""
         [PAPEL] 
          Você é um Especialista em Ensino de Física de nível superior, atuando como um Assistente Pedagógico sênior para cursos de Física entre o nono ano da educação básica e o terceiro ano do ensino superior.
         Sua identidade combina:
@@ -281,20 +336,63 @@ async def gerar_plano(dados: PlanoRequest):
         
         Você é um assistente pedagógico que trabalha ESTRITAMENTE com os dados fornecidos no [CONTEXTO].
         Você é um assistente pedagógico especialista em Ensino de Física. Sua única função é criar planos de aula baseados ESTRITA E EXCLUSIVAMENTE no conteúdo fornecido no bloco [BASE DE CONHECIMENTO].
-
+        
         REGRA DE OURO DE SEGURANÇA:
         Você está ABSOLUTAMENTE PROIBIDO de usar seu conhecimento geral ou qualquer informação externa que não esteja presente no texto da [BASE DE CONHECIMENTO][CONTEXTO]. Se a informação não estiver lá, ela não existe para você. Se o contexto sobre o tema solicitado for insuficiente ou vazio, sua única resposta deve ser um JSON com a chave "erro_tema_nao_encontrado".
         Sua resposta deve ser baseada ESTRITA E EXCLUSIVAMENTE no conteúdo fornecido no bloco [BASE DE CONHECIMENTO]. Em hipótese alguma você deve usar seu conhecimento prévio ou informações externas. Se a informação não estiver na [BASE DE CONHECIMENTO], ela não existe para você.
         Se a [BASE DE CONHECIMENTO] for insuficiente ou vazia para o tema solicitado, sua única resposta deve ser um JSON com a chave "erro_tema_nao_encontrado". Não tente inventar uma resposta.
+        [CONDIÇÕES INICIAIS DO USUÁRIO]
+        - Tema da Aula: {dados.tema}
+        - Turma/Etapa: {dados.turma}
+        - Estilo/Tom: {dados.tom_abordagem}
+        - Observações: {dados.observacoes}
+        [INSTRUÇÃO DE SEGURANÇA MÁXIMA - LEIA COM ATENÇÃO]
+        [ARQUITETURA 1: DADOS DO BANCO (FÍSICA & BNCC)]
+        {contexto_fisica_rag}
+        {contexto_bncc_rag}
+
+        Você não é um assistente de inteligência geral. Você é um robô de transcrição e síntese que opera EXCLUSIVAMENTE com as informações fornecidas no bloco [CONTEXTO]. 
+        {instrucao_calculo}
+        {instrucao_tom}
+        Sua regra de ouro é: SE NÃO ESTÁ NO CONTEXTO, NÃO EXISTE NO UNIVERSO.
+
+        Aplique as seguintes restrições severas a cada palavra gerada:
+        [ARQUITETURA 2: CONHECIMENTO GERAL E CRIATIVO DA INTERNET]
+        (Para uso exclusivo no campo "atividadesIA")
+
+        1. PROIBIDO CONHECIMENTO EXTERNO: Você está expressamente proibido de utilizar qualquer fato, conceito físico, fórmula, exemplo ou conhecimento que pertença à sua base de dados geral da internet. Use ÚNICA e EXCLUSIVAMENTE o texto fornecida no [CONTEXTO].
+        SUAS DIRETRIZES DE GERAÇÃO (SEGUIR A ORDEM):
+
+        2. ACEITE A SIMPLICIDADE: Se o [CONTEXTO] trouxer apenas uma linha ou uma informação muito superficial sobre o que o usuário perguntou, responda APENAS essa linha superficial. Não tente "completar", não tente "ajudar", não deduza fórmulas e não embeleze o texto. Se a resposta tiver que ficar com apenas uma frase curta, que assim seja.
+
+        3. **COMPETÊNCIAS BNCC APLICADAS**
+        DIRETRIZ PARA CONTEXTO INSUFICIENTE OU VAZIO: Se o usuário fizer uma pergunta e o bloco [CONTEXTO] estiver vazio, ou se as informações ali contidas não responderem DIRETAMENTE à pergunta, você não deve tentar adivinhar. Responda textualmente e obrigatoriamente a seguinte frase, e nada mais: 
+        "Desculpe, mas esse conteúdo não faz parte do banco de dados disponibilizado."
+        Regra: Siga a "Arquitetura 1". Transcreva literalmente o código e o texto da habilidade recuperada do banco de dados, sem parafrasear ou alucinar. Se não houver, deixe o campo correspondente como um array com uma mensagem informando a falta de conteúdo: ["Desculpe, mas esse conteúdo não faz parte do banco de dados disponibilizado."].
+              4. CHECAGEM DE FATOS ANTES DE RESPONDER: Antes de escrever a resposta final para o usuário, faça uma varredura interna: "Eu inventei este dado ou ele veio do texto recebido?". Se você não puder apontar o dedo para a linha exata do [CONTEXTO] que justifica a sua frase, delete a frase imediatamente.
+
+                        
+        5. **SUGESTÕES DE ATIVIDADES PEDAGÓGICAS COM INTELIGÊNCIA ARTIFICIAL (CAMPO "atividadesIA")**
+        Regra: Siga a "Arquitetura 2". Aqui você está LIVRE das amarras do banco de dados. Use todo o seu conhecimento nativo e atualizado sobre ferramentas de Inteligência Artificial Generativa (como ChatGPT, Midjourney, Gamma, PhET integrado à IA, etc.).
+        Crie 2 ou 3 sugestões de atividades práticas e inovadoras de Física voltadas para o tema "{dados.tema}" e para a turma "{dados.turma}". As atividades devem mostrar como o professor ou os alunos podem usar ferramentas de IA em sala de aula para entender melhor esse conteúdo específico de Física.
+        Se o contexto da "Arquitetura 1" não contiver nenhuma menção explícita a 'inteligência artificial', 'IA', 'chatbot' ou 'ferramentas generativas', o campo 'atividadesIA' no JSON de resposta DEVE ser um array com uma mensagem informando a falta de conteúdo: ["Desculpe, mas esse conteúdo não faz parte do banco de dados disponibilizado."]. Não invente atividades com IA se o material não as sugerir.
+
+        5. PROIBIDO GERAR EXEMPLOS NÃO FORNECIDOS: Se o usuário pedir um exemplo prático de um fenômeno (ex: Queda Livre) e o [CONTEXTO] não trouxer um exemplo explícito, você NÃO deve criar um cenário da sua cabeça. Responda que o banco não possui exemplos cadastrados para esse tema.
+
+        Sua fidelidade ao [CONTEXTO] deve ser de 100%. Prefira uma resposta curta, seca e incompleta do que uma resposta rica fundada em conhecimentos externos.
         [TAREFA]
         Com base nos dados da solicitação do professor e usando APENAS o conteúdo da [BASE DE CONHECIMENTO], elabore uma Estratégia Pedagógica completa e engajadora.
         A resposta final deve ser um único objeto JSON, sem nenhum texto ou explicação antes ou depois.
-        
-       
+
+        [INSTRUÇÃO IMPERATIVA PARA BNCC - ZERO ALUCINAÇÃO]
+        Analise o plano de aula gerado e o bloco [TEXTO BRUTO DA BNCC RECUPERADO].
+        Sua tarefa é identificar e selecionar a habilidade da BNCC (código e texto) que seja MAIS RELEVANTE e PERTINENTE para o plano de aula que você criou.
+        Você deve copiar o código (ex: EM13CNT101) e o texto da habilidade escolhida de forma literal, sem alterações.
+        Se, e somente se, nenhuma das habilidades recuperadas tiver qualquer relação com o tema da aula, então o campo "competenciasBnccAplicadas" deve ser um array com uma mensagem informando a falta de conteúdo: ["Desculpe, mas esse conteúdo não faz parte do banco de dados disponibilizado."].
 
         RESTRIÇÕES:
         - Não use explicações teóricas densas sem antes dar um exemplo prático do dia a dia.
-        - Baseie-se APENAS no [CONTEXTO] fornecido.
+        - Baseie-se APENAS nos contextos da [BASE DE CONHECIMENTO] fornecida.
         - DIVERSIDADE DE SIMULAÇÕES: Ao preencher o campo "simulacaoSugerida", não sugira apenas o PhET Colorado. Sugira o título exato de uma simulação real priorizando a plataforma mais adequada para o tema:
             * Falstad (excelente para Circuitos Elétricos, Ondas e Matemática)
             * Vascak ou SimuFisica (excelentes para Óptica, Eletromagnetismo e Física Moderna) 
@@ -303,8 +401,12 @@ async def gerar_plano(dados: PlanoRequest):
             * PhET Colorado (use como complemento geral)
 
         [BASE DE CONHECIMENTO]
-        ...
-        {contexto_rag}
+        [CONTEÚDO DE FÍSICA]
+        {contexto_fisica_rag}
+        
+        [TEXTO BRUTO DA BNCC RECUPERADO]
+        {contexto_bncc_rag}
+
 
         {instrucao_calculo}
 
@@ -325,6 +427,7 @@ async def gerar_plano(dados: PlanoRequest):
           "methodology": "Metodologia Principal (Ex: Aprendizagem Baseada em Problemas)",
           "duration": "Duração Total (Ex: 90 min)",
           "learningObjectives": ["Objetivo 1", "Objetivo 2"],
+          "competenciasBnccAplicadas": ["Competência da BNCC relacionada ao tema", "Habilidade da BNCC relacionada ao tema"],
           "requiredMaterials": ["Material 1", "Material 2"],
           "steps": [
             {{
@@ -339,19 +442,32 @@ async def gerar_plano(dados: PlanoRequest):
             "titulo": "Título amigável para o professor ver na tela (ex: 'Gráficos de Posição, Velocidade e Aceleração')",
             "termoBusca": "Apenas 2 ou 3 palavras-chave em minúsculo para o buscador encontrar o site correto (ex: 'fendt aceleracao' ou 'simufisica optica' ou 'falstad circuitos')"
           }},
-          "videoYoutube": {{
+          "youtubeVideo": {{
             "titulo": "Título descritivo do vídeo (ex: 'Leis de Newton por Walter Lewin')"
           }}
+          ,
+          "atividadesIA": [
+            {{
+              "titulo": "Título da atividade com IA (Ex: 'Criando Problemas com IA')", "descricao": "Descrição da atividade."
+            }}
+          ]
         }}
         
         2. **Fórmulas LaTeX (Regra Crítica):** Ao usar qualquer fórmula da [BASE DE CONHECIMENTO], mantenha a sintaxe LaTeX original (ex: $v_m = \frac{{\Delta s}}{{\Delta t}}$ ou $$E=mc^2$$). Esta regra é essencial para a renderização correta no frontend.
         """
+        
+
+        # --- INSTRUÇÃO ADICIONAL PARA ATIVIDADES DE IA ---
+        prompt += "\n[REGRA PARA ATIVIDADES COM IA]\nSe o [CONTEÚDO DE FÍSICA] não contiver nenhuma menção explícita a 'inteligência artificial', 'IA', 'chatbot' ou 'ferramentas generativas', o campo 'atividadesIA' no JSON de resposta DEVE ser um array com uma mensagem informando a falta de conteúdo: ['Desculpe, mas esse conteúdo não faz parte do banco de dados disponibilizado.']. Não invente atividades com IA se o material não as sugerir.\n"
 
         print("🧠 IA gerando plano final...")
-        model = genai.GenerativeModel('gemini-2.0-flash') # Using the latest flash model
+        model = genai.GenerativeModel('gemini-2.5-flash') # Using the latest flash model
         resposta = await model.generate_content_async(
-            prompt, 
-            generation_config={"response_mime_type": "application/json"}
+            prompt,
+            generation_config={
+                "response_mime_type": "application/json",
+                "temperature": 0.0
+            }
         )
         
         # --- CORREÇÃO CIRÚRGICA PARA LATEX ---

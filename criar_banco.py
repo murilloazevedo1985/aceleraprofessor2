@@ -85,6 +85,28 @@ def construir_banco():
                         REGRAS CRUCIAIS:
                         1. NÃO faça uma cópia/transcrição literal linha por linha do texto para evitar problemas de direitos autorais. Em vez disso, REESCREVA as explicações didáticas com suas próprias palavras mantendo o rigor científico.
                         2. Mantenha os valores numéricos, variáveis e fórmulas exatamente como estão na imagem.
+                        
+                        Você é um engenheiro de dados sênior especialista em Pinecone, processamento de PDFs e embeddings. Preciso refatorar o código do meu arquivo 'criar_banco.py' para implementar a estratégia de "Enriquecimento de Contexto por Sinônimos" nos documentos da BNCC, corrigindo um problema de falta de similaridade semântica.
+
+                        O problema atual: Os professores buscam termos como "velocidade média", mas o PDF da BNCC usa termos macro como "movimentos de objetos na Terra". A busca falha porque a palavra "velocidade" não está escrita no texto da habilidade.
+
+                        Preciso que você altere o loop de processamento de texto do 'criar_banco.py' para agir da seguinte forma EXCLUSIVAMENTE quando o arquivo for da BNCC (tipo == "diretriz_bncc"):
+
+                        1. ANTES DE GERAR O EMBEDDING: Para cada pedaço (chunk) de texto extraído do PDF da BNCC, faça uma chamada interna rápida para a API do Gemini (usando o modelo gemini-2.5-flash) com o seguinte prompt de apoio:
+                        \"\"\"
+                        Analise o seguinte trecho de uma diretriz/habilidade da BNCC e identifique quais são os conceitos técnicos, tópicos específicos, fórmulas ou matérias da FÍSICA e da CIÊNCIA (ex: velocidade média, MRU, aceleração, calorimetria, óptica, circuitos elétricos, etc.) que estão implicitamente ou explicitamente relacionados a ele. Devolva APENAS uma linha com esses termos técnicos separados por vírgula.
+                        Trecho: {texto_do_chunk_atual}
+                        \"\"\"
+
+                        2. CONCATENAÇÃO DOS SINÔNIMOS: Pegue a string de termos técnicos devolvida pelo Gemini e concatene-a no final do texto do chunk original, criando uma seção invisível de busca. Exemplo:
+                        texto_enriquecido = texto_original + "\n[Termos Técnicos Associados: " + termos_da_ia + "]"
+
+                        3. GERAÇÃO DE EMBEDDING E UPSERT: O embedding (genai.embed_content) deve ser gerado a partir desse 'texto_enriquecido'. No entanto, armazene dentro do metadado "texto" o conteúdo já enriquecido, garantindo que o Pinecone guarde as palavras-chave para futuras buscas por similaridade.
+
+                        4. PRESERVAÇÃO: Mantenha as tags de metadados existentes ("tipo": "diretriz_bncc", "fonte", "etapa"). Os arquivos comuns de Física (Halliday) não devem passar por esse processo de enriquecimento, apenas os da BNCC.
+
+                        Refatore o código selecionado para implementar essa lógica de forma limpa, tratando possíveis erros de requisição na chamada interna do Gemini.
+
                         """
 
     arquivos = obter_todos_arquivos_da_hierarquia(ID_PASTA_TESTE_DRIVE)
@@ -195,6 +217,13 @@ def construir_banco():
                 print(f"✂️ Fatiando texto de '{arq['name']}'...")
                 pedacos = quebrar_texto(conteudo_arquivo)
                 
+                # --- LÓGICA DE IDENTIFICAÇÃO DO TIPO DE CONTEÚDO ---
+                # Por padrão, todo conteúdo é de física.
+                tipo_conteudo = "conteudo_fisica"
+                # Se o nome do arquivo contiver "bncc", mudamos a etiqueta.
+                if "bncc" in arq['name'].lower():
+                    tipo_conteudo = "diretriz_bncc"
+                
                 print(f"🧠 Transformando textos em vetores via Gemini e enviando para o Pinecone...")
                 vetores_para_pinecone = []
                 
@@ -208,7 +237,11 @@ def construir_banco():
                     vetores_para_pinecone.append({
                         "id": f"{arq['id']}_parte_{i}",
                         "values": resposta_emb['embedding'],
-                        "metadata": {"fonte": arq['name'], "texto": pedaco} 
+                        "metadata": {
+                            "fonte": arq['name'], 
+                            "texto": pedaco,
+                            "tipo": tipo_conteudo # <-- ETIQUETA DINÂMICA: 'conteudo_fisica' ou 'diretriz_bncc'
+                        } 
                     })
                     time.sleep(1)
                 
