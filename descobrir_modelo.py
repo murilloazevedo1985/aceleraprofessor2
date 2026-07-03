@@ -1,8 +1,8 @@
-import google.generativeai as genai
+import google.genai as genai
 
 # Coloque a sua chave real aqui
 CHAVE_API_GEMINI = "AIzaSyDfoQTbsQ7_FAfgINeLivpMjcWUClUZPNM" 
-genai.configure(api_key=CHAVE_API_GEMINI)
+genai.api_key = CHAVE_API_GEMINI
 
 print("🔎 Buscando modelos de Embedding disponíveis na sua conta...\n")
 

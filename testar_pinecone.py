@@ -1,7 +1,7 @@
 import os
 from dotenv import load_dotenv
 from pinecone import Pinecone
-import google.generativeai as genai
+import google.genai as genai
 
 # --- 1. CONFIGURAÇÕES E CREDENCIAIS ---
 caminho_env = os.path.join(os.path.dirname(__file__), '.env')
@@ -14,7 +14,7 @@ CHAVE_API_GEMINI = os.getenv("GEMINI_API_KEY")
 if not CHAVE_API_PINECONE or not CHAVE_API_GEMINI:
     raise ValueError("Certifique-se de que PINECONE_API_KEY e GEMINI_API_KEY estão definidas no seu arquivo .env")
 
-genai.configure(api_key=CHAVE_API_GEMINI)
+genai.api_key = CHAVE_API_GEMINI
 
 
 # --- 2. FUNÇÃO ORIGINAL MELHORADA: TESTE DA BNCC ---

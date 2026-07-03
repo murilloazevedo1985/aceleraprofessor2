@@ -17,17 +17,20 @@
       ]
     }
   },
-  "updateContentCommand": "[ -f packages.txt ] && sudo apt update && sudo apt upgrade -y && sudo xargs apt install -y <packages.txt; [ -f requirements.txt ] && pip3 install --user -r requirements.txt; pip3 install --user streamlit; echo '✅ Packages installed and Requirements met'",
+  "updateContentCommand": "[ -f packages.txt ] && sudo apt update && sudo apt upgrade -y && sudo xargs apt install -y <packages.txt; [ -f requirements.txt ] && pip3 install --user -r requirements.txt; pip3 install --user uvicorn; echo '✅ Packages installed and Requirements met'",
   "postAttachCommand": {
-    "server": "streamlit run app.py --server.enableCORS false --server.enableXsrfProtection false"
+    "server": "uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
   },
   "portsAttributes": {
-    "8501": {
-      "label": "Application",
+    "8000": {
+      "label": "API Backend",
       "onAutoForward": "openPreview"
+    },
+    "3000": {
+      "label": "Frontend"
     }
   },
   "forwardPorts": [
-    8501
+    8000, 3000
   ]
 }

@@ -22,7 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-.env
+
+# Arquivos de segredos e configurações locais
+.env.local
 credentials.json
 # Pastas pesadas do React e Python
 node_modules/
@@ -34,6 +36,3 @@ __pycache__/
 chroma_db/
 *.sqlite3
 *.db
-
-# Chaves secretas
-.env

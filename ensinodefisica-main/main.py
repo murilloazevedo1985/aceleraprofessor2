@@ -32,7 +32,7 @@ app.add_middleware(
 
 # --- 2. CONFIGURAÇÕES E CREDENCIAIS ---
 CHAVE_API_GEMINI = "AIzaSyDfoQTbsQ7_FAfgINeLivpMjcWUClUZPNM" # Não esqueça de colocar sua chave de volta!
-genai.configure(api_key=CHAVE_API_GEMINI)
+genai.api_key = CHAVE_API_GEMINI
 
 # --- 3. CONEXÃO COM O BANCO DE DADOS LOCAL (CHROMADB) ---
 class GeminiEmbeddingFunction(EmbeddingFunction):

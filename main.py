@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
-import google.generativeai as genai
+import google.genai as genai
 import json
 import re
 import os
@@ -12,15 +12,11 @@ from pinecone import Pinecone
 import mimetypes 
 from duckduckgo_search import DDGS
 from pdf2image import convert_from_path
-import google.generativeai as genai
 
-# --- SOLUÇÃO ROBUSTA PARA ENCONTRAR O .ENV ---
-# Constrói o caminho absoluto para o arquivo .env na mesma pasta do script
-caminho_env = os.path.join(os.path.dirname(__file__), '.env')
-
-# Carrega as variáveis de ambiente do arquivo .env
-load_dotenv(dotenv_path=caminho_env)
-
+# Carrega as variáveis de ambiente.
+# Procura primeiro por .env.local (ideal para desenvolvimento) e depois por .env.
+load_dotenv(dotenv_path=".env.local")
+load_dotenv() # Carrega .env se .env.local não for encontrado ou para variáveis base
 # --- CONFIGURAÇÕES ---
 # RECOMENDAÇÃO DE SEGURANÇA: Use variáveis de ambiente para suas chaves!
 CHAVE_API_PINECONE = os.getenv("PINECONE_API_KEY") 
@@ -32,7 +28,7 @@ if not CHAVE_API_PINECONE:
 if not CHAVE_API_GEMINI:
     raise ValueError("A variável de ambiente GEMINI_API_KEY não foi definida.")
 
-genai.configure(api_key=CHAVE_API_GEMINI)
+genai.api_key = CHAVE_API_GEMINI
 
 # Conexão com o Pinecone na Nuvem
 print("🔌 Conectando ao Pinecone...")
@@ -60,6 +56,14 @@ class PlanoRequest(BaseModel):
     recursos: list[str]
     observacoes: str | None = None
     tom_abordagem: str | None = None # NOVO CAMPO PARA O TOM
+
+class ExperimentoRequest(BaseModel):
+    tema: str
+
+@app.get("/health", status_code=200)
+async def health_check():
+    """Endpoint simples para verificar se a API está no ar."""
+    return {"status": "ok"}
 
 @app.post("/perguntar")
 async def perguntar(dados: PerguntaRequest):
@@ -213,6 +217,132 @@ async def extrair_latex_imagem(file: UploadFile = File(...)):
         print(f"❌ Erro ao extrair conteúdo da imagem: {e}")
         raise HTTPException(status_code=500, detail=f"Erro ao processar imagem: {e}")
 
+@app.post("/gerar-experimento-estrategico")
+async def gerar_experimento_estrategico(dados: ExperimentoRequest):
+    """
+    Realiza uma consulta de RAG estruturada para conectar um experimento de física
+    com estratégias pedagógicas pré-definidas.
+    """
+    try:
+        print(f"\n🔬 Iniciando busca de experimento para o tema: '{dados.tema}'")
+
+        # 1. BUSCA VETORIAL DO EXPERIMENTO NO PINECONE
+        res_emb_exp = await genai.embed_content_async(
+            model="models/gemini-embedding-2",
+            content=dados.tema,
+            task_type="retrieval_query"
+        )
+        vetor_busca_exp = res_emb_exp['embedding']
+
+        # Assumindo que os experimentos estão tagueados com "tipo": "experimento_fisica"
+        resultados_exp = await run_in_threadpool(
+            index.query,
+            vector=vetor_busca_exp,
+            top_k=1, # Pega apenas o experimento mais relevante
+            include_metadata=True,
+            filter={"tipo": {"$eq": "experimento_fisica"}}
+        )
+
+        # BARREIRA DE SEGURANÇA: Verifica se um experimento foi encontrado
+        if not resultados_exp.get('matches') or resultados_exp['matches'][0]['score'] < 0.7:
+            print("⛔ BLOQUEADO: Nenhum experimento relevante encontrado no banco de dados.")
+            raise HTTPException(
+                status_code=404, 
+                detail="Desculpe, não encontrei um experimento prático sobre este tema na base de dados."
+            )
+
+        contexto_experimento_rag = resultados_exp['matches'][0]['metadata']['texto']
+        fonte_experimento = resultados_exp['matches'][0]['metadata']['fonte']
+        print(f"✅ Experimento encontrado da fonte: '{fonte_experimento}'")
+
+        # 2. LISTA ESTÁTICA DE ESTRATÉGIAS PEDAGÓGICAS
+        # A lista de estratégias agora é uma string formatada, conforme solicitado.
+        contexto_estrategias_formatado = """
+        **ESTRATÉGIA 1: POE (Predict-Observe-Explain)**
+        - Descrição: Alunos predizem o resultado de um fenômeno, observam e depois explicam as discrepâncias.
+        - Características: Corrige modelos mentais intuitivos.
+        - Conteúdo Recomendado: Mecânica (aceleração, força, velocidade, gravidade), movimento desacelerado/acelerado.
+
+        **ESTRATÉGIA 2: Modelo 7E**
+        - Descrição: Ensino em 7 fases: Elicitar, Engajar, Explorar, Explicar, Elaborar, Avaliar e Estender.
+        - Características: Ciclo de aprendizagem completo, promove entendimento conceitual profundo.
+        - Conteúdo Recomendado: Cinemática, MRUV, gráficos posição × tempo.
+
+        **ESTRATÉGIA 3: Três Momentos Pedagógicos (3MP)**
+        - Descrição: Estrutura em 3 etapas: problematização inicial, organização do conhecimento e aplicação.
+        - Características: Integra teoria e prática, contextualiza problemas reais.
+        - Conteúdo Recomendado: Física Moderna, fotoluminescência, Mecânica Quântica, conceitos abstratos.
+
+        **ESTRATÉGIA 4: Tutoriais ACORN**
+        - Descrição: Desenvolve as "sementes da ciência" (ideias produtivas dos alunos) em 3 etapas: Gather, Articulate, Apply.
+        - Características: Foca no que o aluno acerta, constrói a partir de ideias prévias.
+        - Conteúdo Recomendado: Circuitos elétricos, ondas, momento linear, calor, termodinâmica.
+
+        **ESTRATÉGIA 5: Modelagem Matemática com Dados Reais**
+        - Descrição: Uso de múltiplas representações (concreta, pictórica, simbólica, gráfica) para ensinar conceitos.
+        - Características: Abordagem flexível, promove abstração gradual.
+        - Conteúdo Recomendado: Eletromagnetismo, Lei de Faraday, campos, indução eletromagnética.
+
+        **ESTRATÉGIA 6: Instrução por Pares (Peer Instruction)**
+        - Descrição: Alunos discutem conceitos em pequenos grupos antes de responder questões conceituais.
+        - Características: Engajamento cognitivo, compartilhamento de raciocínio, feedback imediato.
+        - Conteúdo Recomendado: Leis de Newton, conservação de energia, eletricidade básica.
+
+        **ESTRATÉGIA 7: Aprendizagem Baseada em Problemas (PBL)**
+        - Descrição: Alunos aprendem resolvendo problemas relevantes e contextualizados do mundo real.
+        - Características: Trabalho colaborativo, pensamento crítico, problemas abertos.
+        - Conteúdo Recomendado: Fenômenos do cotidiano, projetos interdisciplinares, engenharia.
+
+        **ESTRATÉGIA 8: Gamificação ou Simulação Interativa**
+        - Descrição: Uso de elementos de jogos ou simulações para ensinar.
+        - Características: Alta motivação, ambiente seguro para testar hipóteses, visualização de fenômenos abstratos.
+        - Conteúdo Recomendado: Óptica, Mecânica (colisões), Eletromagnetismo (campos).
+
+        **ESTRATÉGIA 9: Sala de Aula Invertida (Flipped Classroom)**
+        - Descrição: Alunos estudam a teoria em casa e usam a aula para atividades práticas.
+        - Características: Maximiza o tempo de aula para hands-on, promove aprendizagem ativa.
+        - Conteúdo Recomendado: Cinemática, dinâmica, circuitos.
+
+        **ESTRATÉGIA 10: Categorização de Problemas**
+        - Descrição: Ensina estratégias de resolução de especialistas: identificar princípios antes de resolver numericamente.
+        - Características: Foco em desenhos, esquemas e equações conceituais.
+        - Conteúdo Recomendado: Resolução de problemas em Mecânica, Eletrodinâmica, Termodinâmica.
+        """
+
+        # 3. MONTAGEM DO PROMPT ESTRUTURADO PARA O GEMINI
+        prompt = f"""
+        Você é um assistente pedagógico de Física. Seu único objetivo é gerar de 2 a 3 estratégias pedagógicas combinadas e justificadas para um plano de aula, utilizando exclusivamente o `[Experimento_Retornado_Pinecone]` e a `[Lista_Estratégias_Estáticas]` fornecidos no contexto. Você está expressamente PROIBIDO de criar ou sugerir qualquer estratégia que não esteja na lista ou experimento que não esteja no contexto. Se o contexto do Pinecone estiver vazio, informe 'Experimento não encontrado para este tema' e use apenas as estratégias genéricas de quadro, datashow ou exercícios.
+
+        **Instruções de Formatação Obrigatórias:**
+        1. A seção onde você anuncia a escolha da estratégia pedagógica deve ser onde agora está escrito 'estrategia pedagogica'.
+        2. Para cada estratégia sugerida, use o seguinte formato exato:
+            - O nome da estratégia, por exemplo: `Modelagem matemática com dados reais`.
+            - Logo abaixo, uma descrição concisa da estratégia, por exemplo: `(Modelagem matemática com dados reais)** - Descrição: Utiliza dados reais para construir modelos matemáticos e simular cenários fisicos.`.
+        3. Você pode e deve sugerir mais de uma estratégia pedagógica por aula. Por exemplo, deve sugerir a 'sala de aula invertida' num primeiro momento, mas depois sugerir 'gamificação e soluções interativas' usando simulações computacionais.
+        4. Depois de apresentar as 2 ou 3 estratégias e suas descrições, você deve elaborar detalhadamente como o professor pode aplicar as estratégias pedagógicas com o conteúdo e o experimento recuperado. Justifique sua escolha.
+
+        [Experimento_Retornado_Pinecone]
+        {contexto_experimento_rag}
+
+        [Lista_Estratégias_Estáticas]
+        {contexto_estrategias_formatado}
+
+        [TAREFA]
+        Gere um objeto JSON contendo o nome do experimento e uma lista com as estratégias sugeridas e suas justificativas. A resposta deve ser apenas o JSON puro.
+        """
+
+        model = genai.GenerativeModel('gemini-2.5-flash')
+        resposta = await model.generate_content_async(prompt, generation_config={"response_mime_type": "application/json"})
+
+        print("✅ Análise pedagógica gerada com sucesso!")
+        return json.loads(resposta.text)
+
+    except HTTPException as http_exc:
+        raise http_exc # Re-levanta a exceção HTTP para que o FastAPI a manipule
+    except Exception as e:
+        print(f"❌ Erro ao gerar experimento estratégico: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno ao processar a solicitação.")
+
 @app.post("/gerar-plano")
 async def gerar_plano(dados: PlanoRequest):
     try:
@@ -322,10 +452,81 @@ async def gerar_plano(dados: PlanoRequest):
         }
         instrucao_tom = tons_pedagogicos.get(dados.tom_abordagem, "")
 
+        # --- NOVAS DIRETRIZES PEDAGÓGICAS (DA SUA SOLICITAÇÃO) ---
+        instrucao_estrategias_variadas = """
+        [DIRETRIZ DE ESTRATÉGIA PEDAGÓGICA]
+        Ao criar os passos da aula, você deve OBRIGATORIAMENTE variar as abordagens. Escolha pelo menos duas abordagens DIFERENTES da lista abaixo e aplique-as nos passos da aula. Cada estratégia deve incluir uma atividade prática (hands-on) para os alunos.
+        - Exposição dialógica com quadro e giz
+        - Demonstração qualitativa de fenômeno físico
+        - Sala de aula invertida (alunos estudam antes e aplicam em aula)
+        - Aprendizagem baseada em problemas (PBL)
+        - Gamificação ou simulação interativa
+        - Discussão em pequenos grupos com experimento rápido
+        - Modelagem matemática com dados reais (ex: usando filmagem com celular e análise no computador)
+        - Peer instruction (instrução por pares)
+        [DIRETRIZ DE ESTRATÉGIA PEDAGÓGICA MODERNA]
+        Você é um especialista em pedagogias ativas e deve OBRIGATORIAMENTE basear os passos da aula em uma ou mais das estratégias listadas abaixo. Você está PROIBIDO de sugerir aulas expositivas, com quadro e giz ou puramente orais.
+
+        **ESTRATÉGIA 1: POE (Predict-Observe-Explain)**
+        - Descrição: Alunos predizem o resultado de um fenômeno, observam e depois explicam as discrepâncias.
+        - Características: Corrige modelos mentais intuitivos.
+        - Conteúdo Recomendado: Mecânica (aceleração, força, velocidade, gravidade), movimento desacelerado/acelerado.
+
+        **ESTRATÉGIA 2: Modelo 7E**
+        - Descrição: Ensino em 7 fases: Elicitar, Engajar, Explorar, Explicar, Elaborar, Avaliar e Estender.
+        - Características: Ciclo de aprendizagem completo, promove entendimento conceitual profundo.
+        - Conteúdo Recomendado: Cinemática, MRUV, gráficos posição × tempo.
+
+        **ESTRATÉGIA 3: Três Momentos Pedagógicos (3MP)**
+        - Descrição: Estrutura em 3 etapas: problematização inicial, organização do conhecimento e aplicação.
+        - Características: Integra teoria e prática, contextualiza problemas reais.
+        - Conteúdo Recomendado: Física Moderna, fotoluminescência, Mecânica Quântica, conceitos abstratos.
+
+        **ESTRATÉGIA 4: Tutoriais ACORN**
+        - Descrição: Desenvolve as "sementes da ciência" (ideias produtivas dos alunos) em 3 etapas: Gather, Articulate, Apply.
+        - Características: Foca no que o aluno acerta, constrói a partir de ideias prévias.
+        - Conteúdo Recomendado: Circuitos elétricos, ondas, momento linear, calor, termodinâmica.
+
+        **ESTRATÉGIA 5: Modelagem Matemática com Dados Reais**
+        - Descrição: Uso de múltiplas representações (concreta, pictórica, simbólica, gráfica) para ensinar conceitos.
+        - Características: Abordagem flexível, promove abstração gradual.
+        - Conteúdo Recomendado: Eletromagnetismo, Lei de Faraday, campos, indução eletromagnética.
+
+        **ESTRATÉGIA 6: Instrução por Pares (Peer Instruction)**
+        - Descrição: Alunos discutem conceitos em pequenos grupos antes de responder questões conceituais.
+        - Características: Engajamento cognitivo, compartilhamento de raciocínio, feedback imediato.
+        - Conteúdo Recomendado: Leis de Newton, conservação de energia, eletricidade básica.
+
+        **ESTRATÉGIA 7: Aprendizagem Baseada em Problemas (PBL)**
+        - Descrição: Alunos aprendem resolvendo problemas relevantes e contextualizados do mundo real.
+        - Características: Trabalho colaborativo, pensamento crítico, problemas abertos.
+        - Conteúdo Recomendado: Fenômenos do cotidiano, projetos interdisciplinares, engenharia.
+
+        **ESTRATÉGIA 8: Gamificação ou Simulação Interativa**
+        - Descrição: Uso de elementos de jogos ou simulações para ensinar.
+        - Características: Alta motivação, ambiente seguro para testar hipóteses, visualização de fenômenos abstratos.
+        - Conteúdo Recomendado: Óptica, Mecânica (colisões), Eletromagnetismo (campos).
+
+        **ESTRATÉGIA 9: Sala de Aula Invertida (Flipped Classroom)**
+        - Descrição: Alunos estudam a teoria em casa e usam a aula para atividades práticas.
+        - Características: Maximiza o tempo de aula para hands-on, promove aprendizagem ativa.
+        - Conteúdo Recomendado: Cinemática, dinâmica, circuitos.
+
+        **ESTRATÉGIA 10: Categorização de Problemas**
+        - Descrição: Ensina estratégias de resolução de especialistas: identificar princípios antes de resolver numericamente.
+        - Características: Foco em desenhos, esquemas e equações conceituais.
+        - Conteúdo Recomendado: Resolução de problemas em Mecânica, Eletrodinâmica, Termodinâmica.
+
+        [REGRAS DE APLICAÇÃO]
+        1. Varie as estratégias: Use pelo menos duas abordagens diferentes da lista acima nos passos da aula.
+        2. Atividade Prática Obrigatória: Cada passo deve conter uma atividade prática (hands-on).
+        3. Descrição Clara: Descreva cada passo em 4 a 5 linhas, de forma direta para o professor.
+        """
+
         # 4. Prompt Unificado para o Gemini
         prompt = rf"""
         [PAPEL] 
-         Você é um Especialista em Ensino de Física de nível superior, atuando como um Assistente Pedagógico sênior para cursos de Física entre o nono ano da educação básica e o terceiro ano do ensino superior.
+        Você é um Especialista em Ensino de Física de nível superior, atuando como um Assistente Pedagógico sênior.
         Sua identidade combina:
         - Vasta experiência em didática e transposição de conceitos complexos.
         - Conhecimento profundo da estrutura curricular de um bacharelado/licenciatura em Física.
@@ -347,6 +548,8 @@ async def gerar_plano(dados: PlanoRequest):
         - Estilo/Tom: {dados.tom_abordagem}
         - Observações: {dados.observacoes}
         [INSTRUÇÃO DE SEGURANÇA MÁXIMA - LEIA COM ATENÇÃO]
+        {instrucao_estrategias_variadas}
+
         [ARQUITETURA 1: DADOS DO BANCO (FÍSICA & BNCC)]
         {contexto_fisica_rag}
         {contexto_bncc_rag}
@@ -383,15 +586,19 @@ async def gerar_plano(dados: PlanoRequest):
         [TAREFA]
         Com base nos dados da solicitação do professor e usando APENAS o conteúdo da [BASE DE CONHECIMENTO], elabore uma Estratégia Pedagógica completa e engajadora.
         A resposta final deve ser um único objeto JSON, sem nenhum texto ou explicação antes ou depois.
-
+        
         [INSTRUÇÃO IMPERATIVA PARA BNCC - ZERO ALUCINAÇÃO]
         Analise o plano de aula gerado e o bloco [TEXTO BRUTO DA BNCC RECUPERADO].
         Sua tarefa é identificar e selecionar a habilidade da BNCC (código e texto) que seja MAIS RELEVANTE e PERTINENTE para o plano de aula que você criou.
-        Você deve copiar o código (ex: EM13CNT101) e o texto da habilidade escolhida de forma literal, sem alterações.
+        Você deve copiar o código (ex: EM13CNT101) e o texto da habilidade escolhida de forma literal, sem alterações.        
+        [REVISÃO OBRIGATÓRIA DE MATERIAIS]
+        Antes de finalizar o JSON, revise todos os passos da aula que você criou. Crie uma lista contendo APENAS os materiais que foram explicitamente mencionados nas descrições dos passos. O campo "requiredMaterials" no JSON final deve conter SOMENTE os itens dessa lista revisada. Por exemplo, se o professor disponibilizou "trena, cronômetro, bolas de gude", mas você usou apenas a trena e o cronômetro na aula, o campo deve ser `["trena", "cronômetro"]`.
+
         Se, e somente se, nenhuma das habilidades recuperadas tiver qualquer relação com o tema da aula, então o campo "competenciasBnccAplicadas" deve ser um array com uma mensagem informando a falta de conteúdo: ["Desculpe, mas esse conteúdo não faz parte do banco de dados disponibilizado."].
 
         RESTRIÇÕES:
         - Não use explicações teóricas densas sem antes dar um exemplo prático do dia a dia.
+        - No campo "requiredMaterials", liste APENAS os materiais que serão efetivamente utilizados nas estratégias sugeridas nos passos da aula.
         - Baseie-se APENAS nos contextos da [BASE DE CONHECIMENTO] fornecida.
         - DIVERSIDADE DE SIMULAÇÕES: Ao preencher o campo "simulacaoSugerida", não sugira apenas o PhET Colorado. Sugira o título exato de uma simulação real priorizando a plataforma mais adequada para o tema:
             * Falstad (excelente para Circuitos Elétricos, Ondas e Matemática)
@@ -416,15 +623,20 @@ async def gerar_plano(dados: PlanoRequest):
         - TEMA: {dados.tema}
         - FENÔMENO ESPECÍFICO: {dados.fenomeno or 'Não especificado'}
         - TURMA: {dados.turma}
-        - RECURSOS: {", ".join(dados.recursos)}
+        - RECURSOS DISPONÍVEIS (LISTA EXCLUSIVA): {", ".join(dados.recursos) if dados.recursos else "Nenhum material disponível"}
         - OBSERVAÇÕES DO PROFESSOR: {dados.observacoes if dados.observacoes else "Nenhuma observação adicional fornecida."}
+
+        [REGRAS DE OURO PARA MATERIAIS E ACESSIBILIDADE]
+        1. **EXCLUSIVIDADE DE MATERIAIS:** Você está ESTRITAMENTE PROIBIDO de sugerir qualquer material que não esteja na lista "RECURSOS DISPONÍVEIS". O campo `requiredMaterials` do JSON final deve conter um subconjunto dessa lista.
+        2. **CENÁRIO SEM RECURSOS:** Se a lista de "RECURSOS DISPONÍVEIS" estiver vazia ou contiver "Nenhum material", você deve OBRIGATORIAMENTE criar experimentos usando apenas o corpo humano (ex: usar o pulso para medir batimentos, palmas para eco, percepção de equilíbrio, etc.).
+        3. **INCLUSÃO E ACESSIBILIDADE:** Em pelo menos um dos passos da aula, inclua uma nota de "Adaptação para Inclusão", sugerindo como a atividade pode ser modificada para alunos com deficiência visual ou motora (ex: usar feedbacks sonoros, texturas, ou descrições verbais detalhadas no lugar de estímulos visuais).
 
         [REGRAS DE FORMATAÇÃO]
         1. **Estrutura JSON:** O JSON deve seguir exatamente esta estrutura, preenchendo TODOS os campos.
         ```json
         {{
           "title": "Título da Aula sobre {dados.tema}",
-          "methodology": "Metodologia Principal (Ex: Aprendizagem Baseada em Problemas)",
+          "methodology": "O nome da estratégia pedagógica principal usada (Ex: 'Modelo 7E', 'Instrução por Pares', 'Aprendizagem Baseada em Problemas').",
           "duration": "Duração Total (Ex: 90 min)",
           "learningObjectives": ["Objetivo 1", "Objetivo 2"],
           "competenciasBnccAplicadas": ["Competência da BNCC relacionada ao tema", "Habilidade da BNCC relacionada ao tema"],
@@ -433,7 +645,8 @@ async def gerar_plano(dados: PlanoRequest):
             {{
               "time": "Tempo em min",
               "title": "Título do Passo",
-              "description": "Descrição detalhada do passo. Use exemplos práticos do dia a dia antes de teorias densas.",
+              "approach": "Nome da abordagem usada neste passo (Ex: 'Aprendizagem Baseada em Problemas')",
+              "description": "Descrição detalhada do passo em 4 a 5 linhas. Use exemplos práticos do dia a dia antes de teorias densas e inclua uma atividade prática (hands-on).",
               "teacherRole": "Ação específica do docente neste passo.",
               "studentRole": "Ação específica do estudante neste passo."
             }}
@@ -473,7 +686,7 @@ async def gerar_plano(dados: PlanoRequest):
         # --- CORREÇÃO CIRÚRGICA PARA LATEX ---
         # A resposta da IA (resposta.text) é uma string JSON. Fórmulas LaTeX (ex: "\frac")
         # podem conter sequências como `\f` que são interpretadas como caracteres de escape
-        # inválidos pelo `json.loads`. A solução é usar uma expressão regular para
+        # inválidos pelo `json.loads`. A solução é usar uma expressão regular para (raw string)
         # encontrar e escapar apenas as barras invertidas que não fazem parte de uma
         # sequência de escape JSON válida (como \n, \t, \", \\).
         # Isso preserva a integridade das fórmulas LaTeX.
@@ -488,82 +701,9 @@ async def gerar_plano(dados: PlanoRequest):
                 plano_json = {}
         # ----------------------------------------------
         # --- BUSCA CIRÚRGICA DE LINKS DIRETOS (DUCKDUCKGO SITE-TARGET) ---
-        if "simulacaoSugerida" not in plano_json or not plano_json["simulacaoSugerida"]:
-            plano_json["simulacaoSugerida"] = None
-        else:
-            titulo_sim = plano_json["simulacaoSugerida"].get("titulo", "")
-            termo_busca = plano_json["simulacaoSugerida"].get("termoBusca", "")
-            
-            # Garante que temos um termo de busca limpo
-            if not termo_busca:
-                titulo_limpo = re.sub(r'[-():"\'\[\]]', ' ', titulo_sim)
-                termo_busca = " ".join(titulo_limpo.split()[:2])
-            
-            # 1. Identifica qual é o site VIP alvo com base no título gerado pela IA
-            texto_analise = (titulo_sim + " " + termo_busca).lower()
-            dominio_alvo = None
-            link_fallback_urgente = "https://phet.colorado.edu/pt_BR/" # Fallback geral se tudo sumir
-            
-            if "fendt" in texto_analise or "walter" in texto_analise:
-                dominio_alvo = "walter-fendt.de"
-                link_fallback_urgente = "https://www.walter-fendt.de/html5/phbr/"
-            elif "phet" in texto_analise:
-                dominio_alvo = "phet.colorado.edu"
-                link_fallback_urgente = "https://phet.colorado.edu/pt_BR/simulations/filter?type=html5"
-            elif "vascak" in texto_analise:
-                dominio_alvo = "vascak.cz"
-                link_fallback_urgente = "https://www.vascak.cz/physicsanimations.php?l=pt"
-            elif "simufisica" in texto_analise:
-                dominio_alvo = "simufisica.com"
-                link_fallback_urgente = "https://simufisica.com/"
-            elif "falstad" in texto_analise:
-                dominio_alvo = "falstad.com"
-                link_fallback_urgente = "https://falstad.com/mathphysics.html"
-            elif "lemans" in texto_analise:
-                dominio_alvo = "univ-lemans.fr"
-                link_fallback_urgente = "http://ressources.univ-lemans.fr/AccesLibre/UM/Pedago/physique/02/index.html"
-            elif "ck12" in texto_analise or "ck-12" in texto_analise:
-                dominio_alvo = "interactives.ck12.org"
-                link_fallback_urgente = "https://interactives.ck12.org/simulations/physics.html"
-            elif "classroom" in texto_analise or "physicsclassroom" in texto_analise:
-                dominio_alvo = "physicsclassroom.com"
-                link_fallback_urgente = "https://www.physicsclassroom.com/interactive-physics"
-
-            # 2. Monta a Query Inteligente para o DuckDuckGo
-            # Se o domínio for walter-fendt.de e o termo for cinemática, vira: "site:walter-fendt.de cinemática"
-            if dominio_alvo:
-                query_sim = f"site:{dominio_alvo} {termo_busca}"
-            else:
-                query_sim = f"{termo_busca} simulação física"
-                
-            print(f"🔎 Varrendo o site {dominio_alvo or 'Web'} atrás de: '{termo_busca}'")
-            
-            link_final = None
-            
-            # 3. Executa a busca exata no DuckDuckGo
-            try:
-                # --- OTIMIZAÇÃO DE PERFORMANCE ---
-                # Usando a versão assíncrona (atext) da biblioteca duckduckgo-search.
-                # Isso evita o bloqueio do event loop.
-                print(f"⚡️ Executando busca assíncrona no DuckDuckGo: '{query_sim}'")
-                ddgs = DDGS()
-                resultados_sim = await ddgs.atext(query_sim, max_results=3)
-                
-                if resultados_sim:
-                    # Captura o primeiríssimo link retornado dentro daquele site
-                    link_final = resultados_sim[0].get('href', '')
-                    print(f"🌟 LINK DIRETO EXTRAÍDO COM SUCESSO: {link_final}")
-            except Exception as e:
-                link_final = None # Garante que link_final seja None em caso de erro
-                print(f"⚠️ DuckDuckGo recusou a conexão ou deu timeout: {e}")
-
-            # 4. Proteção Extrema: Se o DDGS falhar por bloqueio de IP/Bot, usa o diretório do site
-            if not link_final:
-                print("🔄 DDGS bloqueado temporariamente por IP. Aplicando link direto do diretório VIP.")
-                link_final = link_fallback_urgente
-            
-            # Injeta o link direto (ou do diretório) para o Card do Frontend ler
-            plano_json["simulacaoSugerida"]["url"] = link_final
+        # A lógica de busca de simulação foi movida para uma função auxiliar para simplificar
+        if plano_json.get("simulacaoSugerida"):
+            await buscar_e_anexar_link_simulacao(plano_json)
                     
         if "videoYoutube" not in plano_json:
             plano_json["videoYoutube"] = None
@@ -573,3 +713,58 @@ async def gerar_plano(dados: PlanoRequest):
     except Exception as e:
         print(f"Erro ao gerar plano: {e}")
         raise HTTPException(status_code=500, detail="Erro interno ao gerar plano.")
+
+async def buscar_e_anexar_link_simulacao(plano_json: dict):
+    """Busca o link de uma simulação sugerida e anexa ao JSON."""
+    simulacao = plano_json.get("simulacaoSugerida")
+    if not simulacao or not isinstance(simulacao, dict):
+        return
+
+    titulo_sim = simulacao.get("titulo", "")
+    termo_busca = simulacao.get("termoBusca", "")
+
+    if not termo_busca:
+        titulo_limpo = re.sub(r'[-():"\'\[\]]', ' ', titulo_sim)
+        termo_busca = " ".join(titulo_limpo.split()[:2])
+
+    texto_analise = (titulo_sim + " " + termo_busca).lower()
+    
+    sites_vip = {
+        "walter fendt": ("walter-fendt.de", "https://www.walter-fendt.de/html5/phbr/"),
+        "phet": ("phet.colorado.edu", "https://phet.colorado.edu/pt_BR/simulations/filter?type=html5"),
+        "vascak": ("vascak.cz", "https://www.vascak.cz/physicsanimations.php?l=pt"),
+        "simufisica": ("simufisica.com", "https://simufisica.com/"),
+        "falstad": ("falstad.com", "https://falstad.com/mathphysics.html"),
+        "lemans": ("univ-lemans.fr", "http://ressources.univ-lemans.fr/AccesLibre/UM/Pedago/physique/02/index.html"),
+        "ck-12": ("interactives.ck12.org", "https://interactives.ck12.org/simulations/physics.html"),
+        "classroom": ("physicsclassroom.com", "https://www.physicsclassroom.com/interactive-physics"),
+    }
+
+    dominio_alvo, link_fallback = None, "https://phet.colorado.edu/pt_BR/"
+
+    for keyword, (domain, fallback) in sites_vip.items():
+        if keyword in texto_analise:
+            dominio_alvo, link_fallback = domain, fallback
+            break
+
+    query_sim = f"site:{dominio_alvo} {termo_busca}" if dominio_alvo else f"{termo_busca} simulação física"
+    print(f"🔎 Varrendo '{dominio_alvo or 'Web'}' atrás de: '{termo_busca}'")
+
+    link_final = None
+    try:
+        print(f"⚡️ Executando busca assíncrona no DuckDuckGo: '{query_sim}'")
+        ddgs = DDGS()
+        # Usar atext para busca assíncrona
+        resultados_sim = await ddgs.atext(query_sim, max_results=1)
+        
+        if resultados_sim:
+            link_final = resultados_sim[0].get('href')
+            print(f"🌟 LINK DIRETO EXTRAÍDO: {link_final}")
+    except Exception as e:
+        print(f"⚠️ DuckDuckGo recusou a conexão ou deu timeout: {e}")
+
+    if not link_final:
+        print("🔄 Usando link de fallback do diretório VIP.")
+        link_final = link_fallback
+
+    plano_json["simulacaoSugerida"]["url"] = link_final

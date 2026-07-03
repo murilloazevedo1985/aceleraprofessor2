@@ -1,11 +1,11 @@
-import google.generativeai as genai
+import google.genai as genai
 import os
 
 # Se estiver usando um arquivo .env, certifique-se de carregá-lo
 # ou substitua a linha abaixo pela sua chave real entre aspas
 CHAVE_API = os.getenv("GOOGLE_API_KEY", "AIzaSyDfoQTbsQ7_FAfgINeLivpMjcWUClUZPNM")
 
-genai.configure(api_key=CHAVE_API)
+genai.api_key = CHAVE_API
 
 print("🔍 Buscando modelos de Embedding suportados...\n")
 

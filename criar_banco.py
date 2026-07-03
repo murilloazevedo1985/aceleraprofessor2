@@ -4,7 +4,7 @@ import io
 from dotenv import load_dotenv
 import time
 from pinecone import Pinecone # Adeus ChromaDB, Olá Pinecone!
-import google.generativeai as genai
+import google.genai as genai
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
@@ -14,25 +14,23 @@ from PIL import Image
 import pytesseract
 from pdf2image import convert_from_path
 
-# --- SOLUÇÃO ROBUSTA PARA ENCONTRAR O .ENV ---
-# Constrói o caminho absoluto para o arquivo .env na mesma pasta do script
-caminho_env = os.path.join(os.path.dirname(__file__), '.env')
-
-# Carrega as variáveis de ambiente do arquivo .env
-load_dotenv(dotenv_path=caminho_env)
-
+# Carrega as variáveis de ambiente.
+# Procura primeiro por .env.local (ideal para desenvolvimento) e depois por .env.
+load_dotenv(dotenv_path=".env.local")
+load_dotenv() # Carrega .env se .env.local não for encontrado ou para variáveis base
 # --- 1. CONFIGURAÇÕES E CREDENCIAIS ---
 CHAVE_API_GEMINI = os.getenv("GEMINI_API_KEY")
 CHAVE_API_PINECONE = os.getenv("PINECONE_API_KEY")
 NOME_INDEX_PINECONE = "aulas-fisica"
 ID_PASTA_TESTE_DRIVE = "1jZztziuVQ8e7jJqeBAUXiNP2XQT6fcCJ"
 CAMINHO_JSON_CREDENCIAIS = "credenciais.json"
+POPPLER_PATH = os.getenv("POPPLER_PATH") # NOVO: Caminho para o Poppler
 
 if not CHAVE_API_PINECONE or not CHAVE_API_GEMINI:
     raise ValueError("Certifique-se de que PINECONE_API_KEY e GEMINI_API_KEY estão definidas no seu arquivo .env")
 
 
-genai.configure(api_key=CHAVE_API_GEMINI)
+genai.api_key = CHAVE_API_GEMINI
 
 # --- 2. CONEXÃO COM O DRIVE (Permanece igual) ---
 try:
@@ -146,8 +144,7 @@ def construir_banco():
                         f.write(file_buffer.getbuffer())
                     
                     # Converte as páginas do PDF em imagens usando o Poppler do Windows (Barras normais / evitam erros)
-                    caminho_poppler = "C:/Users/Murilo/Downloads/Release-26.02.0-0/poppler-26.02.0/Library/bin"
-                    paginas = convert_from_path("temp_processamento.pdf", dpi=130, poppler_path=caminho_poppler)
+                    paginas = convert_from_path("temp_processamento.pdf", dpi=130, poppler_path=POPPLER_PATH)
                     
                     model = genai.GenerativeModel('gemini-2.5-flash')
                     
@@ -219,10 +216,18 @@ def construir_banco():
                 
                 # --- LÓGICA DE IDENTIFICAÇÃO DO TIPO DE CONTEÚDO ---
                 # Por padrão, todo conteúdo é de física.
+                etapa_ensino = "não aplicável" # Padrão
                 tipo_conteudo = "conteudo_fisica"
                 # Se o nome do arquivo contiver "bncc", mudamos a etiqueta.
-                if "bncc" in arq['name'].lower():
+                nome_arq_lower = arq['name'].lower()
+                if "bncc" in nome_arq_lower:
                     tipo_conteudo = "diretriz_bncc"
+                    if "fundamental" in nome_arq_lower:
+                        etapa_ensino = "Ensino Fundamental"
+                    elif "medio" in nome_arq_lower or "médio" in nome_arq_lower:
+                        etapa_ensino = "Ensino Médio"
+                    else:
+                        etapa_ensino = "Geral" # Se não especificar, é geral
                 
                 print(f"🧠 Transformando textos em vetores via Gemini e enviando para o Pinecone...")
                 vetores_para_pinecone = []
@@ -240,7 +245,8 @@ def construir_banco():
                         "metadata": {
                             "fonte": arq['name'], 
                             "texto": pedaco,
-                            "tipo": tipo_conteudo # <-- ETIQUETA DINÂMICA: 'conteudo_fisica' ou 'diretriz_bncc'
+                            "tipo": tipo_conteudo, # <-- ETIQUETA DINÂMICA: 'conteudo_fisica' ou 'diretriz_bncc'
+                            "etapa": etapa_ensino # <-- NOVA ETIQUETA: 'Ensino Médio', 'Ensino Fundamental', etc.
                         } 
                     })
                     time.sleep(1)

@@ -8,6 +8,7 @@ import { WorkflowMode, LessonPlanResponse, PhysicsCategories } from '../types';
 export interface LessonStep {
   time: string;
   title: string;
+  approach: string;
   description: string;
   teacherRole: string;
   studentRole: string;
@@ -242,7 +243,7 @@ export default function EstrategiasPedagogicas() {
             <BookOpen className="w-6 h-6 text-indigo-300" />
           </div>
           <div>
-            <h2 className="text-2xl font-black text-white tracking-tight">Estratégias Pedagógicas 123</h2>
+            <h2 className="text-2xl font-black text-white tracking-tight">Estratégias Pedagógicas</h2>
             <p className="text-indigo-300 text-sm font-medium">Configure a turma e gere sua Estratégia Pedagógica com IA</p>
           </div>
         </div>
@@ -383,7 +384,7 @@ export default function EstrategiasPedagogicas() {
                 {/* NOVO BLOCO: SELEÇÃO DE TOM PEDAGÓGICO */}
                 <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
                   <h3 className="flex items-center gap-2 font-bold text-slate-800 mb-4 pb-2 border-b border-slate-100">
-                    <Sparkles className="w-5 h-5 text-indigo-500" /> Tom da Abordagem
+                    <Sparkles className="w-5 h-5 text-indigo-500" /> Abordagem
                   </h3>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     {[

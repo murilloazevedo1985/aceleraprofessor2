@@ -1,7 +1,7 @@
 import os
 from dotenv import load_dotenv
 from pinecone import Pinecone
-import google.generativeai as genai
+import google.genai as genai
 
 # --- 1. CONFIGURAÇÕES ---
 caminho_env = os.path.join(os.path.dirname(__file__), '.env')
@@ -11,7 +11,7 @@ CHAVE_API_PINECONE = os.getenv("PINECONE_API_KEY")
 NOME_INDEX_PINECONE = "aulas-fisica" 
 CHAVE_API_GEMINI = os.getenv("GEMINI_API_KEY")
 
-genai.configure(api_key=CHAVE_API_GEMINI)
+genai.api_key = CHAVE_API_GEMINI
 pc = Pinecone(api_key=CHAVE_API_PINECONE)
 index = pc.Index(NOME_INDEX_PINECONE)
 

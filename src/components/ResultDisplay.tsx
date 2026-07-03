@@ -276,7 +276,7 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({
             </div>
             <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
               <h3 className="flex items-center text-sm font-black text-slate-400 mb-4 uppercase tracking-widest">
-                <Box className="w-5 h-5 mr-2 text-indigo-500" /> Materiais & Simulação
+                <Box className="w-5 h-5 mr-2 text-indigo-500" /> Materiais
               </h3>
               <ul className="space-y-3">
                 {(plan.requiredMaterials || []).map((mat, idx) => (
