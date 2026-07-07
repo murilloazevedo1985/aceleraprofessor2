@@ -29,34 +29,42 @@ const LabAccessOptions = [
   "Laboratório com poucos experimentos e ferramentas",
   "Laboratório de Física completo", "Espaço Maker / FabLab"
 ];
-// REGRA 1: Lista de materiais para quando não há laboratório formal.
-const MateriaisCaseirosOptions = [
-  "Copos plásticos descartáveis", "Garrafas PET (vários tamanhos)", "Elásticos (vários tamanhos)",
-  "Barbante ou cordão de náilon", "Palitos de churrasco ou picolé", "Canudinhos (plástico ou papel)",
-  "Balões de borracha", "Cola quente ou cola branca", "Tesoura e estilete", "Régua e fita métrica",
-  "Papel alumínio e papel filme", "Papelão ou isopor", "Água, óleo, vinagre, corante alimentício",
-  "Açúcar, sal, farinha", "Lanterna ou celular com flash", "Carrinho de brinquedo (com rodas)",
-  "Bolinhas de gude ou esferas de metal"
+
+const MateriaisDisponiveisOptions = [
+  "Multímetro (digital ou analógico)",
+  "Balança (digital ou de precisão)",
+  "Termômetro (digital ou de mercúrio/alcoólico)",
+  "Cronômetro (manual ou celular)",
+  "Trena ou fita métrica de até 5 m",
+  "Tripé universal",
+  "Suporte com garras e anéis",
+  "Bureta ou proveta graduada",
+  "Béquer ou recipiente de vidro",
+  "Paquímetro ou micrômetro",
+  "Dinamômetro (0-5 N, 0-10 N)",
+  "Protoboard (matriz de contatos)",
+  "Fios de ligação (jumpers, bananas)",
+  "Resistor (vários valores: 10Ω, 100Ω, 1kΩ, 10kΩ)",
+  "LED, diodo, transistor, capacitor",
+  "Fonte de alimentação (bateria 9V ou regulável)",
+  "Bússola ou agulha imantada",
+  "Ímã (neodímio ou ferrite)",
+  "Bobina ou fio esmaltado (cobre)",
+  "Lâmpada (pequena, 3V/12V) com suporte",
+  "Interruptor simples ou push-button",
+  "Lupa ou microscópio simples",
+  "Polarizador (lente polaroide)",
+  "Tela de projeção ou anteparo branco",
+  "Laser pointer (verde ou vermelho)",
+  "Prismas, lentes convergentes/divergentes, espelho côncavo/convexo",
+  "Carrinho de trilho (com pouco atrito) ou plano inclinado",
+  "Polias e roldanas",
+  "Mola helicoidal",
+  "Tubos de ensaio com suporte",
+  "Pipeta e seringa (sem agulha)",
+  "Sensor de temperatura (ou termopar)",
+  "Sensor de movimento (sonar)"
 ];
-
-const MateriaisLaboratorioBasicoOptions = [ // REGRA 2: Lista de materiais para laboratórios básicos.
-  "Multímetro (digital ou analógico)", "Balança (digital ou de precisão)", "Termômetro (digital ou de mercúrio/alcoólico)",
-  "Cronômetro (manual ou celular)", "Trena ou fita métrica de até 5 m", "Tripé universal",
-  "Suporte com garras e anéis", "Bureta ou proveta graduada", "Béquer ou recipiente de vidro",
-  "Paquímetro ou micrômetro", "Dinamômetro (0-5 N, 0-10 N)", "Protoboard (matriz de contatos)",
-  "Fios de ligação (jumpers, bananas)", "Resistor (vários valores: 10Ω, 100Ω, 1kΩ, 10kΩ)",
-  "LED, diodo, transistor, capacitor", "Fonte de alimentação (bateria 9V ou regulável)",
-  "Bússola ou agulha imantada", "Ímã (neodímio ou ferrite)", "Bobina ou fio esmaltado (cobre)",
-  "Lâmpada (pequena, 3V/12V) com suporte", "Interruptor simples ou push-button", "Lupa ou microscópio simples",
-  "Polarizador (lente polaroide)", "Tela de projeção ou anteparo branco", "Laser pointer (verde ou vermelho)",
-  "Prismas, lentes convergentes/divergentes, espelho côncavo/convexo", "Carrinho de trilho (com pouco atrito) ou plano inclinado",
-  "Polias e roldanas", "Mola helicoidal", "Tubos de ensaio com suporte", "Pipeta e seringa (sem agulha)",
-  "Sensor de temperatura (ou termopar)", "Sensor de movimento (sonar)"
-]; // Opcional foi removido para ser um item padrão.
-
-// Combina as duas listas para a opção de laboratório completo
-const TodosMateriaisOptions = [...new Set([...MateriaisCaseirosOptions, ...MateriaisLaboratorioBasicoOptions])];
-
 
 const PlaceholderExamples = [
   "Ex: Quero usar água e gelo para estudar termodinâmica.",
@@ -111,13 +119,22 @@ export default function EstrategiasPedagogicas() {
     }
   };
 
+  // Trata a mudança do tipo de laboratório e injeta todos os itens se for laboratório completo
+  const handleLabAccessChange = (option: string) => {
+    setLabAccess(option);
+    if (option === "Laboratório de Física completo") {
+      setSelectedMaterials([...MateriaisDisponiveisOptions]);
+    } else {
+      setSelectedMaterials([]);
+    }
+  };
+
   const handleTemaEscolhido = (nomeDoTema: string) => {
     const partes = nomeDoTema.split(" > ");
     setCategory(partes[0] || nomeDoTema);
     setTopic(partes[1] || nomeDoTema);
   };
 
-  // --- FUNÇÃO CORRIGIDA AQUI ---
   const handleGeneratePlan = async () => {
     if (!category || !topic) {
       alert("Por favor, selecione um Tema da Aula antes de gerar o plano.");
@@ -193,7 +210,7 @@ export default function EstrategiasPedagogicas() {
 
   return (
     <div className="bg-white rounded-[2rem] shadow-xl border border-slate-200 overflow-hidden flex flex-col h-[85vh]">
-      
+          
       {/* --- HEADER FIXO --- */}
       <div className="bg-indigo-900 px-8 py-6 flex items-center justify-between shadow-md z-10 shrink-0">
         <div className="flex items-center gap-4">
@@ -202,7 +219,7 @@ export default function EstrategiasPedagogicas() {
           </div>
           <div>
             <h2 className="text-2xl font-black text-white tracking-tight">Estratégias Pedagógicas</h2>
-            <p className="text-indigo-300 text-sm font-medium">Configure  Pedagógica com IA</p>
+            <p className="text-indigo-300 text-sm font-medium">Configure Pedagógica com IA</p>
           </div>
         </div>
         {(step === 'result' || step === 'loading') && (
@@ -291,13 +308,19 @@ export default function EstrategiasPedagogicas() {
                   <h3 className="flex items-center gap-2 font-bold text-slate-800 mb-4 pb-2 border-b border-slate-100">
                     <FlaskConical className="w-5 h-5 text-indigo-500" /> Materiais e Laboratório
                   </h3>
-                  <div className="space-y-6">
+                  <div className="space-y-4">
                     <div>
                       <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Acesso ao Laboratório</label>
                       <div className="grid grid-cols-1 gap-2">
                         {LabAccessOptions.map(opt => (
                           <label key={opt} className="flex items-start gap-2 cursor-pointer group">
-                            <input type="radio" name="labAccess" className="hidden" checked={labAccess === opt} onChange={() => setLabAccess(opt)} />
+                            <input
+                              type="radio"
+                              name="labAccess"
+                              className="hidden"
+                              checked={labAccess === opt}
+                              onChange={() => handleLabAccessChange(opt)}
+                            />
                             <div className={`mt-0.5 w-4 h-4 rounded-full flex items-center justify-center border transition-colors ${labAccess === opt ? 'bg-indigo-500 border-indigo-500' : 'border-slate-300 group-hover:border-indigo-400'}`}>
                               {labAccess === opt && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
                             </div>
@@ -307,29 +330,19 @@ export default function EstrategiasPedagogicas() {
                       </div>
                     </div>
 
-                    {/* LÓGICA DE EXIBIÇÃO CONDICIONAL DOS MATERIAIS */}
-                    {labAccess !== "Sem acesso a laboratório" && (
+                    {["Laboratório com poucos experimentos e ferramentas", "Laboratório de Física completo", "Espaço Maker / FabLab"].includes(labAccess) && (
                       <div className="animate-in fade-in slide-in-from-top-2 duration-300">
                         <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Marque os Materiais Disponíveis</label>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-2">
-                          {(
-                            labAccess === "Apenas bancada de demonstração" ? MateriaisCaseirosOptions : // REGRA 1: Mapeia "Bancada" para materiais caseiros.
-                            labAccess === "Laboratório com poucos experimentos e ferramentas" ? MateriaisLaboratorioBasicoOptions :
-                            TodosMateriaisOptions
-                          ).map(opt => (
-                              <label key={opt} className="flex items-start gap-2 cursor-pointer group">
-                                <input 
-                                  type="checkbox" 
-                                  className="hidden" 
-                                  checked={selectedMaterials.includes(opt)} 
-                                  onChange={() => toggleMaterial(opt)} 
-                                />
-                                <div className={`mt-0.5 w-4 h-4 rounded flex items-center justify-center border transition-colors ${selectedMaterials.includes(opt) ? 'bg-indigo-500 border-indigo-500' : 'border-slate-300 group-hover:border-indigo-400'}`}>
-                                  {selectedMaterials.includes(opt) && <CheckSquare className="w-3 h-3 text-white" />}
-                                </div>
-                                <span className="text-sm text-slate-600 group-hover:text-slate-900 leading-tight">{opt}</span>
-                              </label>
-                            ))}
+                          {MateriaisDisponiveisOptions.map(opt => (
+                            <label key={opt} className="flex items-start gap-2 cursor-pointer group">
+                              <input type="checkbox" className="hidden" checked={selectedMaterials.includes(opt)} onChange={() => toggleMaterial(opt)} />
+                              <div className={`mt-0.5 w-4 h-4 rounded flex items-center justify-center border transition-colors ${selectedMaterials.includes(opt) ? 'bg-indigo-500 border-indigo-500' : 'border-slate-300 group-hover:border-indigo-400'}`}>
+                                {selectedMaterials.includes(opt) && <CheckSquare className="w-3 h-3 text-white" />}
+                              </div>
+                              <span className="text-sm text-slate-600 group-hover:text-slate-900 leading-tight">{opt}</span>
+                            </label>
+                          ))}
                         </div>
                       </div>
                     )}
@@ -398,7 +411,7 @@ export default function EstrategiasPedagogicas() {
           <div className="h-full flex flex-col items-center justify-center text-center p-8">
             <Loader2 className="w-16 h-16 text-indigo-500 animate-spin mb-6" />
             <h3 className="text-2xl font-black text-slate-800 mb-2">Analisando Arquivos e Parâmetros...</h3>
-            <p className="text-slate-500 text-lg max-w-md">A IA  está elaborando uma Estratégia Pedagógica inspirada no seu contexto e baseada no nosso banco de dados.</p>
+            <p className="text-slate-500 text-lg max-w-md">A IA está elaborando uma Estratégia Pedagógica inspirada no seu contexto e baseada no nosso banco de dados.</p>
           </div>
         )}
 
@@ -409,7 +422,6 @@ export default function EstrategiasPedagogicas() {
               mode={WorkflowMode.STRATEGY} 
               lessonPlan={{
                 ...lessonPlan,
-                // ensure optional fields expected by ResultDisplay exist
                 discussionTopics: (lessonPlan as any).discussionTopics ?? [],
                 visualImagePrompt: (lessonPlan as any).visualImagePrompt ?? null,
               }}

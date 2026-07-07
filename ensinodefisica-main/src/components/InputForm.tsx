@@ -1,7 +1,7 @@
 
 // @ts-nocheck
 import React, { useState, useRef, useEffect } from 'react';
-import { TargetAudience, ClassSize, ITResourcesOptions, LabAccessOptions, EverydayMaterialsOptions, PhysicsCategories, TeacherInput, WorkflowMode, UploadedFile, AudioNote } from '../types';
+import { TargetAudience, ClassSize, ITResourcesOptions, LabAccessOptions, EverydayMaterialsOptions, PhysicsCategories, TeacherInput, WorkflowMode, UploadedFile, AudioNote, LabEquipmentOptions } from '../types';
 import { BookOpen, Users, Monitor, FlaskConical, PenTool, Lightbulb, Box, ChevronDown, ChevronRight, GraduationCap, Calculator, ListChecks, FileText, Upload, X, Mic, Square, Trash2, Play } from 'lucide-react';
 
 interface InputFormProps {
@@ -11,6 +11,42 @@ interface InputFormProps {
   isLoading: boolean;
   mode: WorkflowMode;
 }
+
+const MateriaisLaboratorioOptions = [
+  "Multímetro (digital ou analógico)",
+  "Balança (digital ou de precisão)",
+  "Termômetro (digital ou de mercúrio/alcoólico)",
+  "Cronômetro (manual ou celular)",
+  "Trena ou fita métrica de até 5 m",
+  "Tripé universal",
+  "Suporte com garras e anéis",
+  "Bureta ou proveta graduada",
+  "Béquer ou recipiente de vidro",
+  "Paquímetro ou micrômetro",
+  "Dinamômetro (0-5 N, 0-10 N)",
+  "Protoboard (matriz de contatos)",
+  "Fios de ligação (jumpers, bananas)",
+  "Resistor (vários valores: 10Ω, 100Ω, 1kΩ, 10kΩ)",
+  "LED, diodo, transistor, capacitor",
+  "Fonte de alimentação (bateria 9V ou regulável)",
+  "Bússola ou agulha imantada",
+  "Ímã (neodímio ou ferrite)",
+  "Bobina ou fio esmaltado (cobre)",
+  "Lâmpada (pequena, 3V/12V) com suporte",
+  "Interruptor simples ou push-button",
+  "Lupa ou microscópio simples",
+  "Polarizador (lente polaroide)",
+  "Tela de projeção ou anteparo branco",
+  "Laser pointer (verde ou vermelho)",
+  "Prismas, lentes convergentes/divergentes, espelho côncavo/convexo",
+  "Carrinho de trilho (com pouco atrito) ou plano inclinado",
+  "Polias e roldanas",
+  "Mola helicoidal",
+  "Tubos de ensaio com suporte",
+  "Pipeta e seringa (sem agulha)",
+  "Sensor de temperatura (ou termopar)",
+  "Sensor de movimento (sonar)"
+];
 
 const InputForm: React.FC<InputFormProps> = ({ input, setInput, onSubmit, isLoading, mode }) => {
   const [isTopicMenuOpen, setIsTopicMenuOpen] = useState(false);
@@ -56,7 +92,7 @@ const InputForm: React.FC<InputFormProps> = ({ input, setInput, onSubmit, isLoad
     setInput(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleCheckboxChange = (field: 'itResources' | 'everydayMaterials', value: string) => {
+  const handleCheckboxChange = (field: 'itResources' | 'everydayMaterials' | 'labEquipment', value: string) => {
     setInput(prev => {
       const currentList = prev[field] as string[];
       if (currentList.includes(value)) {
@@ -148,7 +184,7 @@ const InputForm: React.FC<InputFormProps> = ({ input, setInput, onSubmit, isLoad
   };
 
   const experienceOptions = [
-    "Menos de 2 anos",
+    "Menos de 1 anos",
     "Menos de 5 anos",
     "Menos de 10 anos",
     "Menos de 15 anos",
@@ -383,6 +419,27 @@ const InputForm: React.FC<InputFormProps> = ({ input, setInput, onSubmit, isLoad
                   {LabAccessOptions.map(opt => (<option key={opt} value={opt}>{opt}</option>))}
                 </select>
               </div>
+              {input.labAccess === "Laboratório de Física completo" && (
+                <div className="md:col-span-2 bg-slate-50 border border-slate-200 rounded-lg p-5 animate-in fade-in slide-in-from-top-2">
+                   <label className="block text-sm font-medium text-slate-700 mb-3 flex items-center gap-2">
+                      <Box className="w-4 h-4 text-slate-500" />
+                      Equipamentos de Laboratório Disponíveis
+                    </label>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2 max-h-48 overflow-y-auto pr-2">
+                      {MateriaisLaboratorioOptions.map(opt => (
+                        <label key={opt} className="flex items-center gap-2 cursor-pointer text-sm text-slate-600 hover:text-indigo-600">
+                          <input 
+                            type="checkbox" 
+                            checked={input.labEquipment.includes(opt)}
+                            onChange={() => handleCheckboxChange('labEquipment', opt)}
+                            className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                          />
+                          {opt.split(' (')[0]}
+                        </label>
+                      ))}
+                    </div>
+                </div>
+              )}
             </>
           )}
         </div>

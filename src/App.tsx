@@ -67,7 +67,7 @@ export default function App({ onVoltar }: CompetenceAssessmentProps) {
                 <div className="w-12 h-12 bg-slate-50 text-slate-700 rounded-2xl flex items-center justify-center mb-6 border border-slate-100">
                   <ShieldCheck className="w-6 h-6" />
                 </div>
-                <h3 className="text-xl font-bold text-slate-800 mb-3">Competência Digital</h3>
+                <h3 className="text-xl font-bold text-slate-800 mb-3">Competência Digital 123</h3>
                 <p className="text-sm text-slate-500 leading-relaxed mb-8 flex-1">
                   Avalie seu nível de conhecimentos, habilidades e atitudes digitais no ensino de Física.
                 </p>
@@ -96,12 +96,12 @@ export default function App({ onVoltar }: CompetenceAssessmentProps) {
                 </button>
               </div>
 
-              {/* Card 3: Lista de Exercícios */}
+              {/* Card 3: Exercícios */}
               <div className="bg-white p-8 rounded-[1.5rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-lg transition-all border border-slate-100 flex flex-col">
                 <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mb-6 border border-emerald-100">
                   <ListChecks className="w-6 h-6" />
                 </div>
-                <h3 className="text-xl font-bold text-slate-800 mb-3">Lista de Exercícios</h3>
+                <h3 className="text-xl font-bold text-slate-800 mb-3">Exercícios</h3>
                 <p className="text-sm text-slate-500 leading-relaxed mb-8 flex-1">
                   Gere listas de questões progressivas com resoluções detalhadas e gabarito interativo.
                 </p>

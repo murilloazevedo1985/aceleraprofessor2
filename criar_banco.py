@@ -233,9 +233,29 @@ def construir_banco():
                 vetores_para_pinecone = []
                 
                 for i, pedaco in enumerate(pedacos):
+                    texto_final_para_embedding = pedaco
+                    
+                    # --- ENRIQUECIMENTO DE CONTEXTO PARA BNCC ---
+                    if tipo_conteudo == "diretriz_bncc":
+                        print(f"    - Enriquecendo chunk {i+1} da BNCC com sinônimos via IA...")
+                        try:
+                            prompt_enriquecimento = f"""
+                            Analise o seguinte trecho de uma diretriz/habilidade da BNCC e identifique quais são os conceitos técnicos, tópicos específicos, fórmulas ou matérias da FÍSICA e da CIÊNCIA (ex: velocidade média, MRU, aceleração, calorimetria, óptica, circuitos elétricos, etc.) que estão implicitamente ou explicitamente relacionados a ele. Devolva APENAS uma linha com esses termos técnicos separados por vírgula.
+                            Trecho: {pedaco}
+                            """
+                            modelo_flash = genai.GenerativeModel('gemini-2.5-flash')
+                            resposta_ia = modelo_flash.generate_content(prompt_enriquecimento)
+                            termos_da_ia = resposta_ia.text.strip()
+                            
+                            if termos_da_ia:
+                                texto_final_para_embedding = pedaco + f"\n[Termos Técnicos Associados: {termos_da_ia}]"
+                                print(f"      - Termos adicionados: {termos_da_ia}")
+                        except Exception as e_gemini:
+                            print(f"    ⚠️ Erro na chamada interna do Gemini para enriquecimento: {e_gemini}")
+
                     resposta_emb = genai.embed_content(
                         model="models/gemini-embedding-2",
-                        content=pedaco,
+                        content=texto_final_para_embedding, # Usa o texto enriquecido para o embedding
                         task_type="retrieval_document"
                     )
                     
@@ -244,12 +264,12 @@ def construir_banco():
                         "values": resposta_emb['embedding'],
                         "metadata": {
                             "fonte": arq['name'], 
-                            "texto": pedaco,
+                            "texto": texto_final_para_embedding, # Salva o texto já enriquecido no metadata
                             "tipo": tipo_conteudo, # <-- ETIQUETA DINÂMICA: 'conteudo_fisica' ou 'diretriz_bncc'
                             "etapa": etapa_ensino # <-- NOVA ETIQUETA: 'Ensino Médio', 'Ensino Fundamental', etc.
                         } 
                     })
-                    time.sleep(1)
+                    time.sleep(1) # Mantém o sleep para não sobrecarregar a API
                 
                 if vetores_para_pinecone:
                     index.upsert(vectors=vetores_para_pinecone)

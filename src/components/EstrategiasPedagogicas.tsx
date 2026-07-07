@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { BookOpen, Sparkles, CheckSquare, Layers, Wrench, MonitorPlay, Users, FileText, Loader2, Upload } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { BookOpen, Sparkles, CheckSquare, Layers, Wrench, MonitorPlay, Users, FileText, Loader2, Upload, Star, X } from 'lucide-react';
 import 'katex/dist/katex.min.css';
 import { MenuTemas } from './MenuTemas';
 import ResultDisplay from './ResultDisplay';
@@ -55,13 +55,49 @@ const LabAccessOptions = [
   "Laboratório de Física completo", "Espaço Maker / FabLab"
 ];
 
-const EverydayMaterialsOptions = [
-  "Nenhum material extra", "Papelaria básica (papel, tesoura, cola)",
-  "Materiais recicláveis (PET, papelão)", "Itens de cozinha (copos, pratos, água, óleo, talheres)",
-  "Ferramentas simples (régua, trena, cronômetro do celular)",
-  "Instrumentos de laboratório (balança, termômetro, multímetro)",
-  "Ferramentas Gerais (serra, martelo, chave de fenda, alicate)",
-  "Bolas (gude, ping-pong, tênis, futebol)", "Elásticos e Molas"
+const MateriaisBasicosOptions = [
+  "Garrafa PET, copos e canudos", 
+  "Barbante ou linha", 
+  "Papelão, papel e fita adesiva", 
+  "Pilhas comuns (AA/AAA)", 
+  "Cronômetro (manual ou celular)", 
+  "Trena ou fita métrica de até 5 m"
+];
+
+const MateriaisAvancadosOptions = [
+  "Multímetro (digital ou analógico)",
+  "Balança (digital ou de precisão)",
+  "Termômetro (digital ou de mercúrio/alcoólico)",
+  "Cronômetro (manual ou celular)",
+  "Trena ou fita métrica de até 5 m",
+  "Tripé universal",
+  "Suporte com garras e anéis",
+  "Bureta ou proveta graduada",
+  "Béquer ou recipiente de vidro",
+  "Paquímetro ou micrômetro",
+  "Dinamômetro (0-5 N, 0-10 N)",
+  "Protoboard (matriz de contatos)",
+  "Fios de ligação (jumpers, bananas)",
+  "Resistor (vários valores: 10Ω, 100Ω, 1kΩ, 10kΩ)",
+  "LED, diodo, transistor, capacitor",
+  "Fonte de alimentação (bateria 9V ou regulável)",
+  "Bússola ou agulha imantada",
+  "Ímã (neodímio ou ferrite)",
+  "Bobina ou fio esmaltado (cobre)",
+  "Lâmpada (pequena, 3V/12V) com suporte",
+  "Interruptor simples ou push-button",
+  "Lupa ou microscópio simples",
+  "Polarizador (lente polaroide)",
+  "Tela de projeção ou anteparo branco",
+  "Laser pointer (verde ou vermelho)",
+  "Prismas, lentes convergentes/divergentes, espelho côncavo/convexo",
+  "Carrinho de trilho (com pouco atrito) ou plano inclinado",
+  "Polias e roldanas",
+  "Mola helicoidal",
+  "Tubos de ensaio com suporte",
+  "Pipeta e seringa (sem agulha)",
+  "Sensor de temperatura (ou termopar)",
+  "Sensor de movimento (sonar)"
 ];
 
 const PlaceholderExamples = [
@@ -127,7 +163,7 @@ export default function EstrategiasPedagogicas() {
   const [phenomenon, setPhenomenon] = useState("");
   
   const [selectedIT, setSelectedIT] = useState<string[]>([]);
-  const [labAccess, setLabAccess] = useState(LabAccessOptions[0]);
+  const [labAccess, setLabAccess] = useState<string[]>([LabAccessOptions[0]]);
   const [selectedMaterials, setSelectedMaterials] = useState<string[]>([]);
   
   const [tomAbordagem, setTomAbordagem] = useState('conceitual'); // NOVO ESTADO PARA O TOM
@@ -139,6 +175,10 @@ export default function EstrategiasPedagogicas() {
   });
   
   const [lessonPlan, setLessonPlan] = useState<LessonPlanResponse | null>(null);
+  // --- NOVOS ESTADOS PARA A GALERIA ---
+  const [highlightedStrategies, setHighlightedStrategies] = useState<any[]>([]);
+  const [selectedStrategy, setSelectedStrategy] = useState<LessonPlanResponse | null>(null);
+  const [isLoadingGallery, setIsLoadingGallery] = useState(true);
 
   // --- FUNÇÕES DE LÓGICA ---
   const handleReset = () => {
@@ -156,6 +196,22 @@ export default function EstrategiasPedagogicas() {
     }
   };
 
+  const toggleLabAccess = (item: string) => {
+    setLabAccess(prev => {
+      // Regra de exclusividade: Se "Sem acesso" for selecionado, ele se torna a única opção.
+      if (item === "Sem acesso a laboratório") {
+        return prev.includes(item) ? [] : [item];
+      }
+
+      // Garante que "Sem acesso" seja removido se outra opção for marcada.
+      const withoutNoLab = prev.filter(i => i !== "Sem acesso a laboratório");
+
+      // Adiciona ou remove o item clicado.
+      return withoutNoLab.includes(item) 
+        ? withoutNoLab.filter(i => i !== item) 
+        : [...withoutNoLab, item];
+    });
+  };
   const toggleMaterial = (item: string) => {
     if (item === "Nenhum material extra") {
       setSelectedMaterials(selectedMaterials.includes(item) ? [] : [item]);
@@ -173,6 +229,27 @@ export default function EstrategiasPedagogicas() {
     setTopic(partes[1] || nomeDoTema);
     setPhenomenon(""); // Reseta o fenômeno ao trocar o tema
   };
+
+  // --- EFEITO PARA BUSCAR AS MELHORES ESTRATÉGIAS ---
+  useEffect(() => {
+    const fetchHighlighted = async () => {
+      setIsLoadingGallery(true);
+      try {
+        const BASE_URL = import.meta.env.VITE_API_URL;
+        const API_URL = `${BASE_URL}/melhores-estrategias`;
+        const response = await fetch(API_URL);
+        if (!response.ok) throw new Error('Falha ao buscar estratégias');
+        const data = await response.json();
+        setHighlightedStrategies(data);
+      } catch (error) {
+        console.error("Erro ao carregar galeria:", error);
+        setHighlightedStrategies([]); // Limpa em caso de erro
+      } finally {
+        setIsLoadingGallery(false);
+      }
+    };
+    fetchHighlighted();
+  }, []);
 
   const handleGeneratePlan = async () => {
     if (!category || !topic) {
@@ -353,9 +430,9 @@ export default function EstrategiasPedagogicas() {
                       <div className="grid grid-cols-1 gap-2">
                         {LabAccessOptions.map(opt => (
                           <label key={opt} className="flex items-start gap-2 cursor-pointer group">
-                            <input type="radio" name="labAccess" className="hidden" checked={labAccess === opt} onChange={() => setLabAccess(opt)} />
-                            <div className={`mt-0.5 w-4 h-4 rounded-full flex items-center justify-center border transition-colors ${labAccess === opt ? 'bg-indigo-500 border-indigo-500' : 'border-slate-300 group-hover:border-indigo-400'}`}>
-                              {labAccess === opt && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                            <input type="checkbox" className="hidden" checked={labAccess.includes(opt)} onChange={() => toggleLabAccess(opt)} />
+                            <div className={`mt-0.5 w-4 h-4 rounded flex items-center justify-center border transition-colors ${labAccess.includes(opt) ? 'bg-indigo-500 border-indigo-500' : 'border-slate-300 group-hover:border-indigo-400'}`}>
+                              {labAccess.includes(opt) && <CheckSquare className="w-3 h-3 text-white" />}
                             </div>
                             <span className="text-sm text-slate-600 group-hover:text-slate-900 leading-tight">{opt}</span>
                           </label>
@@ -363,11 +440,28 @@ export default function EstrategiasPedagogicas() {
                       </div>
                     </div>
 
-                    {["Laboratório com poucos experimentos e ferramentas", "Laboratório de Física completo", "Espaço Maker / FabLab"].includes(labAccess) && (
+                    {labAccess.includes("Laboratório com poucos experimentos e ferramentas") && (
                       <div className="animate-in fade-in slide-in-from-top-2 duration-300">
-                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Materiais Disponíveis</label>
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Materiais Básicos Disponíveis</label>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-2">
-                          {EverydayMaterialsOptions.map(opt => (
+                          {MateriaisBasicosOptions.map(opt => (
+                            <label key={opt} className="flex items-start gap-2 cursor-pointer group">
+                              <input type="checkbox" className="hidden" checked={selectedMaterials.includes(opt)} onChange={() => toggleMaterial(opt)} />
+                              <div className={`mt-0.5 w-4 h-4 rounded flex items-center justify-center border transition-colors ${selectedMaterials.includes(opt) ? 'bg-indigo-500 border-indigo-500' : 'border-slate-300 group-hover:border-indigo-400'}`}>
+                                {selectedMaterials.includes(opt) && <CheckSquare className="w-3 h-3 text-white" />}
+                              </div>
+                              <span className="text-sm text-slate-600 group-hover:text-slate-900 leading-tight">{opt}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {(labAccess.includes("Laboratório de Física completo") || labAccess.includes("Espaço Maker / FabLab")) && (
+                      <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Materiais Avançados Disponíveis</label>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-2">
+                          {MateriaisAvancadosOptions.map(opt => (
                             <label key={opt} className="flex items-start gap-2 cursor-pointer group">
                               <input type="checkbox" className="hidden" checked={selectedMaterials.includes(opt)} onChange={() => toggleMaterial(opt)} />
                               <div className={`mt-0.5 w-4 h-4 rounded flex items-center justify-center border transition-colors ${selectedMaterials.includes(opt) ? 'bg-indigo-500 border-indigo-500' : 'border-slate-300 group-hover:border-indigo-400'}`}>
@@ -440,6 +534,69 @@ export default function EstrategiasPedagogicas() {
                 <Sparkles className="w-6 h-6" /> Gerar Estratégia Pedagógica
               </button>
             </div>
+
+            {/* --- NOVA SEÇÃO: GALERIA DE DESTAQUES --- */}
+            {(isLoadingGallery || highlightedStrategies.length > 0) && (
+              <div className="pt-12 border-t border-slate-200">
+                <h3 className="text-2xl font-black text-slate-800 mb-8 flex items-center gap-3">
+                  <Star className="w-7 h-7 text-amber-400 fill-amber-400" />
+                  Estratégias que outros professores estão usando
+                </h3>
+                {isLoadingGallery ? (
+                  <div className="text-center text-slate-500">Carregando destaques...</div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {highlightedStrategies.map((item, index) => (
+                      <div key={index} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-lg hover:border-indigo-300 transition-all flex flex-col">
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-lg text-xs font-black uppercase">{item.plano.methodology}</span>
+                          <div className="flex items-center gap-1 text-amber-500">
+                            <span className="font-bold text-sm">{item.nota.toFixed(1)}</span>
+                            <Star className="w-4 h-4 fill-current" />
+                          </div>
+                        </div>
+                        <h4 className="font-bold text-slate-800 text-lg leading-tight flex-grow mb-4">{item.tema}</h4>
+                        <button 
+                          onClick={() => setSelectedStrategy(item.plano)}
+                          className="mt-auto w-full text-center bg-slate-100 hover:bg-indigo-600 hover:text-white text-slate-600 font-bold py-2 px-4 rounded-lg transition-colors"
+                        >
+                          Ver Detalhes
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* --- MODAL PARA EXIBIR DETALHES DA ESTRATÉGIA --- */}
+            {selectedStrategy && (
+              <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-in fade-in">
+                <div className="relative bg-slate-50 rounded-2xl w-full max-w-6xl h-[90vh] flex flex-col shadow-2xl">
+                  <button 
+                    onClick={() => setSelectedStrategy(null)}
+                    className="absolute top-4 right-4 bg-white/80 hover:bg-white rounded-full p-2 z-10 transition-all"
+                  >
+                    <X className="w-6 h-6 text-slate-700" />
+                  </button>
+                  <div className="flex-1 overflow-y-auto">
+                    <ResultDisplay
+                      mode={WorkflowMode.STRATEGY}
+                      lessonPlan={selectedStrategy}
+                      exerciseList={null}
+                      generatedImageUrl={null}
+                      generatedAnimationSvg={null}
+                      onReset={() => setSelectedStrategy(null)}
+                      onGenerateImage={async () => {}}
+                      onGenerateAnimation={async () => {}}
+                      exerciseImages={{}}
+                      isGeneratingImage={false}
+                      isGeneratingAnimation={false}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
             
           </div>
         )}

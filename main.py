@@ -12,6 +12,7 @@ from pinecone import Pinecone
 import mimetypes 
 from duckduckgo_search import DDGS
 from pdf2image import convert_from_path
+import firebase_admin
 
 # Carrega as variáveis de ambiente.
 # Procura primeiro por .env.local (ideal para desenvolvimento) e depois por .env.
@@ -20,6 +21,7 @@ load_dotenv() # Carrega .env se .env.local não for encontrado ou para variávei
 # --- CONFIGURAÇÕES ---
 # RECOMENDAÇÃO DE SEGURANÇA: Use variáveis de ambiente para suas chaves!
 CHAVE_API_PINECONE = os.getenv("PINECONE_API_KEY") 
+CAMINHO_JSON_CREDENCIAIS = "credenciais.json"
 NOME_INDEX_PINECONE = "aulas-fisica"
 CHAVE_API_GEMINI = os.getenv("GEMINI_API_KEY")
 
@@ -34,6 +36,16 @@ genai.api_key = CHAVE_API_GEMINI
 print("🔌 Conectando ao Pinecone...")
 pc = Pinecone(api_key=CHAVE_API_PINECONE)
 index = pc.Index(NOME_INDEX_PINECONE)
+
+# --- NOVA CONFIGURAÇÃO: FIREBASE ADMIN SDK ---
+print("🔥 Conectando ao Firebase (Firestore)...")
+try:
+    cred = firebase_admin.credentials.Certificate(CAMINHO_JSON_CREDENCIAIS)
+    firebase_admin.initialize_app(cred)
+    db = firebase_admin.firestore.client()
+    print("✅ Conectado ao Firestore com sucesso.")
+except Exception as e:
+    print(f"❌ Erro ao conectar com o Firebase: {e}. Verifique se o arquivo '{CAMINHO_JSON_CREDENCIAIS}' está correto.")
 
 app = FastAPI()
 app.add_middleware(
@@ -59,6 +71,11 @@ class PlanoRequest(BaseModel):
 
 class ExperimentoRequest(BaseModel):
     tema: str
+
+class AvaliacaoRequest(BaseModel):
+    plano: dict # O JSON completo do plano de aula
+    nota: int # A nota de 1 a 5
+    tema: str # O tema da aula para exibição
 
 @app.get("/health", status_code=200)
 async def health_check():
@@ -532,14 +549,14 @@ async def gerar_plano(dados: PlanoRequest):
         - Conhecimento profundo da estrutura curricular de um bacharelado/licenciatura em Física.
         DIRETRIZES RÍGIDAS DE ATUAÇÃO:
         1. Respeito ao Nível dos Alunos: Identifique rigorosamente os pré-requisitos matemáticos da ementa fornecida. Se o documento indicar que a turma é do 1º período (Introdução à Física) e ainda não cursou Cálculo Integral, você está PROIBIDO de utilizar formalismo de derivadas ou integrais nas estratégias.
-        2. Abordagem Didática: Quando o cálculo formal for vetado, utilize sua experiência didática para explicar os conceitos fisicamente através de taxas médias, análises gráficas, analogias cotidianas e geometria elementar.
-        3. Quando o contexto permitir o uso de Cálculo, sinta-se à vontade para incorporar derivadas e integrais, mas sempre contextualizando com exemplos práticos do dia a dia antes de apresentar a teoria formal.
+        2. Abordagem Didática: Quando o cálculo formal for vetado, utilize sua experiência didática para explicar os conceitos fisicamente através de taxas médias, análises gráficas, analogias cotidianas e geometria elementar. 
+        3. Quando o contexto permitir o uso de Cálculo, sinta-se à vontade para incorporar derivadas e integrais, mas sempre contextualizando com exemplos práticos do dia a dia antes de apresentar a teoria formal. 
         
         Você é um assistente pedagógico que trabalha ESTRITAMENTE com os dados fornecidos no [CONTEXTO].
         Você é um assistente pedagógico especialista em Ensino de Física. Sua única função é criar planos de aula baseados ESTRITA E EXCLUSIVAMENTE no conteúdo fornecido no bloco [BASE DE CONHECIMENTO].
         
         REGRA DE OURO DE SEGURANÇA:
-        Você está ABSOLUTAMENTE PROIBIDO de usar seu conhecimento geral ou qualquer informação externa que não esteja presente no texto da [BASE DE CONHECIMENTO][CONTEXTO]. Se a informação não estiver lá, ela não existe para você. Se o contexto sobre o tema solicitado for insuficiente ou vazio, sua única resposta deve ser um JSON com a chave "erro_tema_nao_encontrado".
+        Você está ABSOLUTAMENTE PROIBIDO de usar seu conhecimento geral ou qualquer informação externa que não esteja presente no texto da [BASE DE CONHECIMENTO][CONTEXTO] para os campos principais do plano de aula. Se a informação não estiver lá, ela não existe para você. Se o contexto sobre o tema solicitado for insuficiente ou vazio, sua única resposta deve ser um JSON com a chave "erro_tema_nao_encontrado".
         Sua resposta deve ser baseada ESTRITA E EXCLUSIVAMENTE no conteúdo fornecido no bloco [BASE DE CONHECIMENTO]. Em hipótese alguma você deve usar seu conhecimento prévio ou informações externas. Se a informação não estiver na [BASE DE CONHECIMENTO], ela não existe para você.
         Se a [BASE DE CONHECIMENTO] for insuficiente ou vazia para o tema solicitado, sua única resposta deve ser um JSON com a chave "erro_tema_nao_encontrado". Não tente inventar uma resposta.
         [CONDIÇÕES INICIAIS DO USUÁRIO]
@@ -560,27 +577,24 @@ async def gerar_plano(dados: PlanoRequest):
         Sua regra de ouro é: SE NÃO ESTÁ NO CONTEXTO, NÃO EXISTE NO UNIVERSO.
 
         Aplique as seguintes restrições severas a cada palavra gerada:
-        [ARQUITETURA 2: CONHECIMENTO GERAL E CRIATIVO DA INTERNET]
-        (Para uso exclusivo no campo "atividadesIA")
-
-        1. PROIBIDO CONHECIMENTO EXTERNO: Você está expressamente proibido de utilizar qualquer fato, conceito físico, fórmula, exemplo ou conhecimento que pertença à sua base de dados geral da internet. Use ÚNICA e EXCLUSIVAMENTE o texto fornecida no [CONTEXTO].
+        
+        1. PROIBIDO CONHECIMENTO EXTERNO (EXCETO PARA ATIVIDADES COM IA): Para todos os campos do JSON, exceto "atividadesIA", você está expressamente proibido de utilizar qualquer fato, conceito físico, fórmula, exemplo ou conhecimento que pertença à sua base de dados geral da internet. Use ÚNICA e EXCLUSIVAMENTE o texto fornecida no [CONTEXTO].
         SUAS DIRETRIZES DE GERAÇÃO (SEGUIR A ORDEM):
 
         2. ACEITE A SIMPLICIDADE: Se o [CONTEXTO] trouxer apenas uma linha ou uma informação muito superficial sobre o que o usuário perguntou, responda APENAS essa linha superficial. Não tente "completar", não tente "ajudar", não deduza fórmulas e não embeleze o texto. Se a resposta tiver que ficar com apenas uma frase curta, que assim seja.
 
-        3. **COMPETÊNCIAS BNCC APLICADAS**
+        3. **COMPETÊNCIAS BNCC APLICADAS** 
         DIRETRIZ PARA CONTEXTO INSUFICIENTE OU VAZIO: Se o usuário fizer uma pergunta e o bloco [CONTEXTO] estiver vazio, ou se as informações ali contidas não responderem DIRETAMENTE à pergunta, você não deve tentar adivinhar. Responda textualmente e obrigatoriamente a seguinte frase, e nada mais: 
         "Desculpe, mas esse conteúdo não faz parte do banco de dados disponibilizado."
         Regra: Siga a "Arquitetura 1". Transcreva literalmente o código e o texto da habilidade recuperada do banco de dados, sem parafrasear ou alucinar. Se não houver, deixe o campo correspondente como um array com uma mensagem informando a falta de conteúdo: ["Desculpe, mas esse conteúdo não faz parte do banco de dados disponibilizado."].
-              4. CHECAGEM DE FATOS ANTES DE RESPONDER: Antes de escrever a resposta final para o usuário, faça uma varredura interna: "Eu inventei este dado ou ele veio do texto recebido?". Se você não puder apontar o dedo para a linha exata do [CONTEXTO] que justifica a sua frase, delete a frase imediatamente.
+        4. CHECAGEM DE FATOS ANTES DE RESPONDER: Antes de escrever a resposta final para o usuário, faça uma varredura interna: "Eu inventei este dado ou ele veio do texto recebido?". Se você não puder apontar o dedo para a linha exata do [CONTEXTO] que justifica a sua frase, delete a frase imediatamente.
 
                         
-        5. **SUGESTÕES DE ATIVIDADES PEDAGÓGICAS COM INTELIGÊNCIA ARTIFICIAL (CAMPO "atividadesIA")**
-        Regra: Siga a "Arquitetura 2". Aqui você está LIVRE das amarras do banco de dados. Use todo o seu conhecimento nativo e atualizado sobre ferramentas de Inteligência Artificial Generativa (como ChatGPT, Midjourney, Gamma, PhET integrado à IA, etc.).
-        Crie 2 ou 3 sugestões de atividades práticas e inovadoras de Física voltadas para o tema "{dados.tema}" e para a turma "{dados.turma}". As atividades devem mostrar como o professor ou os alunos podem usar ferramentas de IA em sala de aula para entender melhor esse conteúdo específico de Física.
-        Se o contexto da "Arquitetura 1" não contiver nenhuma menção explícita a 'inteligência artificial', 'IA', 'chatbot' ou 'ferramentas generativas', o campo 'atividadesIA' no JSON de resposta DEVE ser um array com uma mensagem informando a falta de conteúdo: ["Desculpe, mas esse conteúdo não faz parte do banco de dados disponibilizado."]. Não invente atividades com IA se o material não as sugerir.
+        5. **SUGESTÕES DE ATIVIDADES PEDAGÓGICAS COM INTELIGÊNCIA ARTIFICIAL (CAMPO "atividadesIA")** 
+        Regra: Para este campo, você está LIVRE das amarras do banco de dados. Use todo o seu conhecimento nativo e atualizado sobre ferramentas de Inteligência Artificial Generativa (como ChatGPT, Midjourney, Gamma, etc.).
+        Crie 1 ou 2 sugestões de atividades práticas e inovadoras de Física voltadas para o tema "{dados.tema}" e para a turma "{dados.turma}". As atividades devem mostrar como o professor ou os alunos podem usar ferramentas de IA em sala de aula para entender melhor esse conteúdo específico de Física. Seja criativo e proponha dinâmicas ativas, como Sala de Aula Invertida, debates baseados em pesquisas com IA, ou criação de conteúdo pelos próprios alunos.
 
-        5. PROIBIDO GERAR EXEMPLOS NÃO FORNECIDOS: Se o usuário pedir um exemplo prático de um fenômeno (ex: Queda Livre) e o [CONTEXTO] não trouxer um exemplo explícito, você NÃO deve criar um cenário da sua cabeça. Responda que o banco não possui exemplos cadastrados para esse tema.
+        6. PROIBIDO GERAR EXEMPLOS NÃO FORNECIDOS: Se o usuário pedir um exemplo prático de um fenômeno (ex: Queda Livre) e o [CONTEXTO] não trouxer um exemplo explícito, você NÃO deve criar um cenário da sua cabeça. Responda que o banco não possui exemplos cadastrados para esse tema.
 
         Sua fidelidade ao [CONTEXTO] deve ser de 100%. Prefira uma resposta curta, seca e incompleta do que uma resposta rica fundada em conhecimentos externos.
         [TAREFA]
@@ -626,6 +640,11 @@ async def gerar_plano(dados: PlanoRequest):
         - RECURSOS DISPONÍVEIS (LISTA EXCLUSIVA): {", ".join(dados.recursos) if dados.recursos else "Nenhum material disponível"}
         - OBSERVAÇÕES DO PROFESSOR: {dados.observacoes if dados.observacoes else "Nenhuma observação adicional fornecida."}
 
+        [DIRETRIZ DE MATERIAIS - REGRA RÍGIDA]
+        O usuário selecionou que possui APENAS os seguintes materiais disponíveis em sua escola/laboratório: {", ".join(dados.recursos) if dados.recursos else "Nenhum material disponível"}.
+        Ao propor o plano de aula e detalhar as estratégias pedagógicas, você deve, obrigatoriamente, adaptar a aplicação prática do experimento recuperado do Pinecone para utilizar APENAS os materiais que constam nessa lista. Se o experimento original do Pinecone exigir um material que NÃO está na lista, você deve sugerir uma adaptação/substituição usando estritamente os materiais disponíveis informados pelo usuário, mantendo a viabilidade física e pedagógica da atividade.
+
+
         [REGRAS DE OURO PARA MATERIAIS E ACESSIBILIDADE]
         1. **EXCLUSIVIDADE DE MATERIAIS:** Você está ESTRITAMENTE PROIBIDO de sugerir qualquer material que não esteja na lista "RECURSOS DISPONÍVEIS". O campo `requiredMaterials` do JSON final deve conter um subconjunto dessa lista.
         2. **CENÁRIO SEM RECURSOS:** Se a lista de "RECURSOS DISPONÍVEIS" estiver vazia ou contiver "Nenhum material", você deve OBRIGATORIAMENTE criar experimentos usando apenas o corpo humano (ex: usar o pulso para medir batimentos, palmas para eco, percepção de equilíbrio, etc.).
@@ -669,9 +688,6 @@ async def gerar_plano(dados: PlanoRequest):
         2. **Fórmulas LaTeX (Regra Crítica):** Ao usar qualquer fórmula da [BASE DE CONHECIMENTO], mantenha a sintaxe LaTeX original (ex: $v_m = \frac{{\Delta s}}{{\Delta t}}$ ou $$E=mc^2$$). Esta regra é essencial para a renderização correta no frontend.
         """
         
-
-        # --- INSTRUÇÃO ADICIONAL PARA ATIVIDADES DE IA ---
-        prompt += "\n[REGRA PARA ATIVIDADES COM IA]\nSe o [CONTEÚDO DE FÍSICA] não contiver nenhuma menção explícita a 'inteligência artificial', 'IA', 'chatbot' ou 'ferramentas generativas', o campo 'atividadesIA' no JSON de resposta DEVE ser um array com uma mensagem informando a falta de conteúdo: ['Desculpe, mas esse conteúdo não faz parte do banco de dados disponibilizado.']. Não invente atividades com IA se o material não as sugerir.\n"
 
         print("🧠 IA gerando plano final...")
         model = genai.GenerativeModel('gemini-2.5-flash') # Using the latest flash model
@@ -768,3 +784,53 @@ async def buscar_e_anexar_link_simulacao(plano_json: dict):
         link_final = link_fallback
 
     plano_json["simulacaoSugerida"]["url"] = link_final
+
+@app.post("/avaliar-estrategia")
+async def avaliar_estrategia(dados: AvaliacaoRequest):
+    """
+    Recebe a avaliação de uma estratégia e a salva no Firestore.
+    """
+    try:
+        print(f"✍️ Recebendo avaliação de {dados.nota} estrelas para o tema '{dados.tema}'...")
+        
+        # Cria uma referência para a coleção 'avaliacoes'
+        avaliacoes_ref = db.collection('avaliacoes')
+        
+        # Adiciona um novo documento com um ID gerado automaticamente
+        # Inclui um timestamp do servidor para ordenação futura
+        await run_in_threadpool(
+            avaliacoes_ref.add,
+            {
+                'plano': dados.plano,
+                'nota': dados.nota,
+                'tema': dados.tema,
+                'timestamp': firebase_admin.firestore.SERVER_TIMESTAMP
+            }
+        )
+        
+        print("✅ Avaliação salva com sucesso no Firestore.")
+        return {"status": "sucesso", "mensagem": "Obrigado por sua contribuição!"}
+
+    except Exception as e:
+        print(f"❌ Erro ao salvar avaliação no Firestore: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno ao salvar a avaliação.")
+
+@app.get("/melhores-estrategias")
+async def get_melhores_estrategias():
+    """
+    Recupera as 10 estratégias mais recentes com 4 ou 5 estrelas.
+    """
+    try:
+        print("🏆 Buscando as melhores estratégias no Firestore...")
+        avaliacoes_ref = db.collection('avaliacoes')
+        
+        # Query para buscar as 10 melhores (mais recentes com nota >= 4)
+        query = avaliacoes_ref.where('nota', '>=', 4).order_by('nota', direction=firebase_admin.firestore.Query.DESCENDING).order_by('timestamp', direction=firebase_admin.firestore.Query.DESCENDING).limit(10)
+        
+        resultados = await run_in_threadpool(query.stream)
+        estrategias = [doc.to_dict() for doc in resultados]
+        
+        return estrategias
+    except Exception as e:
+        print(f"❌ Erro ao buscar melhores estratégias: {e}")
+        raise HTTPException(status_code=500, detail="Erro ao buscar as melhores estratégias.")

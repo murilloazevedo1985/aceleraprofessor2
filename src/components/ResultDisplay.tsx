@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { LessonPlanResponse, ExerciseListResponse, WorkflowMode, Difficulty } from '../types';
-import { Clock, Target, Box, CheckCircle, ArrowLeft, Download, Smartphone, Youtube, Star, Image as ImageIcon, ExternalLink, Eye, EyeOff, Book, Library, AlertCircle, Code, Copy, Check, PlayCircle, Video, Search, Sparkles } from 'lucide-react';
+import { Clock, Target, Box, CheckCircle, ArrowLeft, Download, Smartphone, Youtube, Star, Image as ImageIcon, ExternalLink, Eye, EyeOff, Book, Library, AlertCircle, Code, Copy, Check, PlayCircle, Video, Search, Sparkles, Info } from 'lucide-react';
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
 import { LessonStep } from './EstrategiasPedagogicas';
@@ -206,6 +206,9 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({
   isGeneratingAnimation
 }) => {
   console.log("=== MODO ATUAL ===", mode);
+  const [rating, setRating] = useState(0);
+  const [isSubmittingRating, setIsSubmittingRating] = useState(false);
+  const [ratingSubmitted, setRatingSubmitted] = useState(false);
   console.log("=== DADOS DO PLANO (CRU) ===", JSON.stringify(lessonPlan, null, 2));
   console.log("=== DADOS DOS EXERCÍCIOS (CRU) ===", JSON.stringify(exerciseList, null, 2));
   
@@ -220,6 +223,35 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({
   const safeVideo = lessonPlan?.youtubeVideo || (lessonPlan as any)?.videoYoutube || (lessonPlan as any)?.video;
   // ✅ CORREÇÃO: Adicionando a mesma lógica para encontrar as atividades de IA
   const safeAtividadesIA = lessonPlan?.atividadesIA || (lessonPlan as any)?.atividades_ia || [];
+
+  const handleRating = async (rate: number) => {
+    if (ratingSubmitted || isSubmittingRating) return;
+
+    setRating(rate);
+    setIsSubmittingRating(true);
+
+    try {
+      const BASE_URL = import.meta.env.VITE_API_URL;
+      const API_URL = `${BASE_URL}/avaliar-estrategia`;
+
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          plano: lessonPlan,
+          nota: rate,
+          tema: lessonPlan?.title || 'Estratégia sem título'
+        }),
+      });
+
+      if (!response.ok) throw new Error('Falha ao enviar avaliação');
+      setRatingSubmitted(true);
+    } catch (error) {
+      console.error("Erro ao avaliar:", error);
+    } finally {
+      setIsSubmittingRating(false);
+    }
+  };
   
   if (hasError) {
     return (
@@ -327,9 +359,20 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({
 
       {/* ROTEIRO DA AULA */}
       <div className="bg-white rounded-2xl shadow-xl p-10 border border-slate-200">
-        <h2 className="text-2xl font-black text-slate-900 mb-10 border-b pb-6 flex items-center gap-3">
-          <Book className="w-8 h-8 text-indigo-600" /> Roteiro de Aula Detalhado
-        </h2>
+        <div className="flex items-center gap-3 border-b pb-6 mb-10">
+          <Book className="w-8 h-8 text-indigo-600" />
+          <h2 className="text-2xl font-black text-slate-900">
+            Roteiro de Aula Detalhado
+          </h2>
+          <div className="relative group">
+            <Info className="w-5 h-5 text-slate-400 cursor-help" />
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 hidden group-hover:block bg-slate-800 text-white text-xs rounded-lg py-2 px-3 shadow-lg z-10">
+              Este conteúdo foi gerado com IA a partir de um banco de dados.
+              <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-slate-800"></div>
+            </div>
+          </div>
+        </div>
+
         <div className="space-y-12">
           {(plan.steps || []).map((step, index) => (
             <div key={index} className="space-y-4 print:break-inside-avoid">
@@ -382,21 +425,30 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({
 
       {/* NOVA SEÇÃO: SUGESTÕES DE ATIVIDADES COM IA */}
       {Array.isArray(safeAtividadesIA) && safeAtividadesIA.length > 0 && (
-        <div className="mt-16 pt-10 border-t-2 border-slate-100">
-          <h3 className="text-2xl font-black text-slate-800 mb-8 flex items-center gap-3">
+        <div className="mt-12 pt-10 border-t-2 border-slate-100 animate-in fade-in slide-in-from-bottom-6 duration-500">
+          <div className="flex items-center gap-3 mb-8">
             <Sparkles className="w-7 h-7 text-violet-500" />
-            Atividades com Inteligência Artificial
-          </h3>
+            <h3 className="text-2xl font-black text-slate-800">
+              Atividades com Inteligência Artificial
+            </h3>
+            <div className="relative group">
+              <Info className="w-5 h-5 text-slate-400 cursor-help" />
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 hidden group-hover:block bg-slate-800 text-white text-xs rounded-lg py-2 px-3 shadow-lg z-10">
+                Esta ideia não passou por banco de dados, sendo gerada puramente por IA.
+                <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-slate-800"></div>
+              </div>
+            </div>
+          </div>
           <div className="space-y-6">
             {safeAtividadesIA.map((atividad:AtividadeIA, index: number) => (
-              <div key={index} className="bg-white border-2 border-slate-200 p-8 rounded-2xl shadow-lg transition-all hover:shadow-violet-200 hover:border-violet-300 group">
+              <div key={index} className="bg-white border-2 border-violet-200 p-8 rounded-2xl shadow-lg transition-all hover:shadow-violet-300/50 hover:border-violet-400 group">
                 <div className="flex items-start gap-4">
-                  <div className="p-3 bg-violet-100 rounded-xl border border-violet-200 group-hover:bg-violet-600 group-hover:text-white transition-colors">
+                  <div className="p-3 bg-violet-100 rounded-xl border border-violet-200 group-hover:bg-violet-200 transition-colors">
                      <Sparkles className="w-6 h-6 text-violet-600 group-hover:text-white transition-colors" />
                   </div>
                   <div>
-                    <h4 className="text-xl font-black text-slate-800 mb-2 group-hover:text-violet-700 transition-colors">{atividad.titulo}</h4>
-                    <p className="text-slate-600 leading-relaxed">{atividad.descricao}</p>
+                    <h4 className="text-xl font-black text-slate-800 mb-2 group-hover:text-violet-800 transition-colors">{atividad.titulo}</h4>
+                    <p className="text-slate-600 leading-relaxed text-base">{atividad.descricao}</p>
                   </div>
                 </div>
               </div>
@@ -405,6 +457,37 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({
         </div>
       )}
 
+      {/* NOVA SEÇÃO: AVALIAÇÃO DA ESTRATÉGIA */}
+      <div className="mt-16 pt-10 border-t-2 border-slate-100">
+        <div className="text-center">
+          <h3 className="text-2xl font-black text-slate-800 mb-4">
+            {ratingSubmitted ? "✅ Obrigado por contribuir!" : "O que achou desta estratégia?"}
+          </h3>
+          <p className="text-slate-500 mb-8 max-w-md mx-auto">
+            {ratingSubmitted ? "Sua avaliação ajuda a comunidade de professores a encontrar as melhores práticas." : "Sua opinião é fundamental para aprimorar nosso motor de IA e destacar as melhores ideias para outros professores."}
+          </p>
+          {!ratingSubmitted && (
+            <div className="flex justify-center items-center gap-3">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button
+                  key={star}
+                  onClick={() => handleRating(star)}
+                  disabled={isSubmittingRating || ratingSubmitted}
+                  className="disabled:opacity-50 disabled:cursor-not-allowed group"
+                >
+                  <Star
+                    className={`w-12 h-12 transition-all duration-200 ease-in-out transform 
+                      ${rating >= star 
+                        ? 'text-amber-400 fill-amber-400' 
+                        : 'text-slate-300 group-hover:text-amber-300'}
+                      ${isSubmittingRating && rating === star ? 'animate-ping' : 'group-hover:scale-110'}`}
+                  />
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 
