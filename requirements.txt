@@ -10,3 +10,4 @@ pydantic
 duckduckgo-search
 chromadb
 pinecone
+google-genai
