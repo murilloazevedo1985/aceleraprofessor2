@@ -12,3 +12,4 @@ chromadb
 pinecone
 googlesearch-python
 firebase-admin
+pdf2image
