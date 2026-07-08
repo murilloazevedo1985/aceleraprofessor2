@@ -7,7 +7,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 CAMINHO_JSON_CREDENCIAIS = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "credenciais.json")
-
+if not os.path.isabs(CAMINHO_JSON_CREDENCIAIS):
+    CAMINHO_JSON_CREDENCIAIS = os.path.join(os.path.dirname(__file__), CAMINHO_JSON_CREDENCIAIS)
 print("🕵️ Iniciando Raio-X Total do Robô...\n")
 
 try:

@@ -24,9 +24,12 @@ if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
     
 # Carrega as variáveis de ambiente.
+# Define o caminho para o diretório raiz do projeto para encontrar os arquivos .env
+project_root = os.path.dirname(__file__)
 # Procura primeiro por .env.local (ideal para desenvolvimento) e depois por .env.
-load_dotenv(dotenv_path=".env.local")
-load_dotenv() # Carrega .env se .env.local não for encontrado ou para variáveis base
+
+load_dotenv(dotenv_path=os.path.join(project_root, ".env.local"))
+load_dotenv(dotenv_path=os.path.join(project_root, ".env")) # Carrega .env se .env.local não for encontrado ou para variáveis base
 # --- CONFIGURAÇÕES ---
 # RECOMENDAÇÃO DE SEGURANÇA: Use variáveis de ambiente para suas chaves!
 CHAVE_API_PINECONE = os.getenv("PINECONE_API_KEY") 

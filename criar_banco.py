@@ -14,10 +14,12 @@ from PIL import Image
 import pytesseract
 from pdf2image import convert_from_path
 from firebase_admin import firestore
+# Define o caminho para o diretório raiz do projeto para encontrar os arquivos .env
+project_root = os.path.dirname(__file__)
 # Carrega as variáveis de ambiente.
 # Procura primeiro por .env.local (ideal para desenvolvimento) e depois por .env.
-load_dotenv(dotenv_path=".env.local")
-load_dotenv() # Carrega .env se .env.local não for encontrado ou para variáveis base
+load_dotenv(dotenv_path=os.path.join(project_root, ".env.local"))
+load_dotenv(dotenv_path=os.path.join(project_root, ".env")) # Carrega .env se .env.local não for encontrado ou para variáveis base
 # --- 1. CONFIGURAÇÕES E CREDENCIAIS ---
 CHAVE_API_GEMINI = os.getenv("GEMINI_API_KEY")
 CHAVE_API_PINECONE = os.getenv("PINECONE_API_KEY")
