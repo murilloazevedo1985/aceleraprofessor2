@@ -13,7 +13,16 @@ import mimetypes
 from duckduckgo_search import DDGS
 from pdf2image import convert_from_path
 import firebase_admin
+import os
+import uvicorn
 
+if __name__ == "__main__":
+    # O Render envia uma variável chamada PORT. Se ela não existir, usamos a 8000 (para o seu PC local)
+    port = int(os.environ.get("PORT", 8000))
+    
+    # Isso força o app a rodar no endereço 0.0.0.0 (obrigatório para a nuvem) e na porta certa
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
+    
 # Carrega as variáveis de ambiente.
 # Procura primeiro por .env.local (ideal para desenvolvimento) e depois por .env.
 load_dotenv(dotenv_path=".env.local")

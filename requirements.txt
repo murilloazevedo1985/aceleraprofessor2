@@ -11,3 +11,4 @@ duckduckgo-search
 chromadb
 pinecone
 googlesearch-python
+firebase-admin

@@ -13,7 +13,7 @@ import docx
 from PIL import Image
 import pytesseract
 from pdf2image import convert_from_path
-
+from firebase_admin import firestore
 # Carrega as variáveis de ambiente.
 # Procura primeiro por .env.local (ideal para desenvolvimento) e depois por .env.
 load_dotenv(dotenv_path=".env.local")
