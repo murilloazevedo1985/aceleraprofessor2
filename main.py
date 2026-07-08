@@ -12,7 +12,7 @@ from pinecone import Pinecone
 import mimetypes 
 from duckduckgo_search import DDGS
 from pdf2image import convert_from_path
-import firebase_admin
+from firebase_admin import credentials, firestore, initialize_app, _apps
 import os
 import uvicorn
 
@@ -27,7 +27,6 @@ if __name__ == "__main__":
 # Define o caminho para o diretório raiz do projeto para encontrar os arquivos .env
 project_root = os.path.dirname(__file__)
 # Procura primeiro por .env.local (ideal para desenvolvimento) e depois por .env.
-
 load_dotenv(dotenv_path=os.path.join(project_root, ".env.local"))
 load_dotenv(dotenv_path=os.path.join(project_root, ".env")) # Carrega .env se .env.local não for encontrado ou para variáveis base
 # --- CONFIGURAÇÕES ---
@@ -52,9 +51,11 @@ index = pc.Index(NOME_INDEX_PINECONE)
 # --- NOVA CONFIGURAÇÃO: FIREBASE ADMIN SDK ---
 print("🔥 Conectando ao Firebase (Firestore)...")
 try:
-    cred = firebase_admin.credentials.Certificate(CAMINHO_JSON_CREDENCIAIS)
-    firebase_admin.initialize_app(cred)
-    db = firebase_admin.firestore.client()
+    # Evita reinicializar o app se já estiver inicializado (útil em ambientes de reload)
+    if not _apps:
+        cred = credentials.Certificate(CAMINHO_JSON_CREDENCIAIS)
+        initialize_app(cred)
+    db = firestore.client()
     print("✅ Conectado ao Firestore com sucesso.")
 except Exception as e:
     print(f"❌ Erro ao conectar com o Firebase: {e}. Verifique se o arquivo '{CAMINHO_JSON_CREDENCIAIS}' está correto.")

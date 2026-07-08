@@ -7,7 +7,6 @@ from chromadb.api.types import Documents, EmbeddingFunction, Embeddings
 import json
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from firebase_admin import firestore
 import firebase_admin
 from firebase_admin import firestore  # <--- ESSA LINHA É OBRIGATÓRIA!
 

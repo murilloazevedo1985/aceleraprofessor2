@@ -12,8 +12,8 @@ import pypdf
 import docx
 from PIL import Image
 import pytesseract
-from pdf2image import convert_from_path
-from firebase_admin import firestore
+from pdf2image import convert_from_path 
+from firebase_admin import credentials, firestore, initialize_app, _apps
 # Define o caminho para o diretório raiz do projeto para encontrar os arquivos .env
 project_root = os.path.dirname(__file__)
 # Carrega as variáveis de ambiente.
