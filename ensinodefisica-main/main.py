@@ -8,6 +8,15 @@ import json
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from firebase_admin import firestore
+import firebase_admin
+from firebase_admin import firestore  # <--- ESSA LINHA É OBRIGATÓRIA!
+
+# Se o Firebase ainda não foi inicializado, inicializa
+if not firebase_admin._apps:
+    firebase_admin.initialize_app()
+
+# Agora sim você pode chamar o cliente do banco de dados com segurança:
+db = firestore.client()
 
 app = FastAPI()
 
