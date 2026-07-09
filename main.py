@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.concurrency import run_in_threadpool
+import firebase_admin
 from pydantic import BaseModel
 import google.genai as genai
 import json
@@ -16,13 +17,6 @@ from firebase_admin import credentials, firestore, initialize_app, _apps
 import os
 import uvicorn
 
-if __name__ == "__main__":
-    # O Render envia uma variável chamada PORT. Se ela não existir, usamos a 8000 (para o seu PC local)
-    port = int(os.environ.get("PORT", 8000))
-    
-    # Isso força o app a rodar no endereço 0.0.0.0 (obrigatório para a nuvem) e na porta certa
-    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
-    
 # Carrega as variáveis de ambiente.
 # Define o caminho para o diretório raiz do projeto para encontrar os arquivos .env
 project_root = os.path.dirname(__file__)

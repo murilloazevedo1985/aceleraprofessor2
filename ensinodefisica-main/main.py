@@ -133,7 +133,7 @@ async def gerar_plano(dados: PlanoRequest):
         """
 
         print("🧠 Gerando plano com o Gemini...")
-        model = genai.GenerativeModel('gemini-2.0-flash')
+        model = genai.GenerativeModel('gemini-1.5-flash')
         resposta = await model.generate_content_async(prompt, generation_config={"response_mime_type": "application/json"})
         
         plano_json = json.loads(resposta.text)
