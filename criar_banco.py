@@ -35,11 +35,18 @@ if not CHAVE_API_PINECONE or not CHAVE_API_GEMINI:
 genai.api_key = CHAVE_API_GEMINI
 
 # --- 2. CONEXÃO COM O DRIVE (Permanece igual) ---
+print("🔑 Conectando ao Google Drive...")
 try:
-    creds = service_account.Credentials.from_service_account_file(
-        CAMINHO_JSON_CREDENCIAIS,
-        scopes=['https://www.googleapis.com/auth/drive.readonly']
-    )
+    firebase_creds_json_str = os.getenv("FIREBASE_CREDENTIALS_JSON")
+    if firebase_creds_json_str:
+        # Ambiente de nuvem: carrega as credenciais da variável de ambiente
+        creds_dict = json.loads(firebase_creds_json_str)
+        creds = service_account.Credentials.from_service_account_info(creds_dict, scopes=['https://www.googleapis.com/auth/drive.readonly'])
+    else:
+        # Ambiente local: carrega do arquivo credenciais.json
+        creds = service_account.Credentials.from_service_account_file(
+            CAMINHO_JSON_CREDENCIAIS, scopes=['https://www.googleapis.com/auth/drive.readonly']
+        )
     drive_service = build('drive', 'v3', credentials=creds)
     print("✅ Conectado ao Google Drive.")
 except Exception as e:

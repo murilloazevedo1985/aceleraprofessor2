@@ -22,7 +22,6 @@ import uvicorn
 project_root = os.path.dirname(__file__)
 # Procura primeiro por .env.local (ideal para desenvolvimento) e depois por .env.
 load_dotenv(dotenv_path=os.path.join(project_root, ".env.local"))
-load_dotenv(dotenv_path=os.path.join(project_root, ".env")) # Carrega .env se .env.local não for encontrado ou para variáveis base
 # --- CONFIGURAÇÕES ---
 # RECOMENDAÇÃO DE SEGURANÇA: Use variáveis de ambiente para suas chaves!
 CHAVE_API_PINECONE = os.getenv("PINECONE_API_KEY")  # Certifique-se de definir esta variável de ambiente
@@ -46,8 +45,17 @@ index = pc.Index(NOME_INDEX_PINECONE)
 print("🔥 Conectando ao Firebase (Firestore)...")
 try:
     # Evita reinicializar o app se já estiver inicializado (útil em ambientes de reload)
+    firebase_creds_json_str = os.getenv("FIREBASE_CREDENTIALS_JSON")
     if not _apps:
-        cred = credentials.Certificate(CAMINHO_JSON_CREDENCIAIS)
+        if firebase_creds_json_str:
+            # Ambiente de nuvem: carrega as credenciais da variável de ambiente
+            print("   - Carregando credenciais do Firebase via variável de ambiente.")
+            creds_dict = json.loads(firebase_creds_json_str)
+            cred = credentials.Certificate(creds_dict)
+        else:
+            # Ambiente local: carrega do arquivo credenciais.json
+            print(f"   - Carregando credenciais do Firebase do arquivo '{CAMINHO_JSON_CREDENCIAIS}'.")
+            cred = credentials.Certificate(CAMINHO_JSON_CREDENCIAIS)
         initialize_app(cred)
     db = firestore.client()
     print("✅ Conectado ao Firestore com sucesso.")
