@@ -5,6 +5,7 @@ from google import genai
 import chromadb
 from chromadb.api.types import Documents, EmbeddingFunction, Embeddings
 import json
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import firebase_admin
@@ -133,7 +134,7 @@ async def gerar_plano(dados: PlanoRequest):
         """
 
         print("🧠 Gerando plano com o Gemini...")
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        model = genai.GenerativeModel('gemini-2.5-flash')
         resposta = await model.generate_content_async(prompt, generation_config={"response_mime_type": "application/json"})
         
         plano_json = json.loads(resposta.text)

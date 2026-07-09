@@ -148,7 +148,7 @@ def construir_banco():
                     # Converte as páginas do PDF em imagens usando o Poppler do Windows (Barras normais / evitam erros)
                     paginas = convert_from_path("temp_processamento.pdf", dpi=130, poppler_path=POPPLER_PATH)
                     
-                    model = genai.GenerativeModel('gemini-2.5-flash')
+                    model = genai.GenerativeModel('gemini-1.5-flash')
                     
                     # Executa a análise visual página por página
                     for i, pagina in enumerate(paginas):
@@ -197,7 +197,7 @@ def construir_banco():
                 
                 try:
                     # 2. Inicializa o modelo do Gemini
-                    model = genai.GenerativeModel('gemini-2.5-flash')
+                    model = genai.GenerativeModel('gemini-1.5-flash')
                     
                     # 3. Faz o upload da foto para a API do Google
                     imagem_upload = genai.upload_file(path="temp_foto.jpg")
@@ -245,7 +245,7 @@ def construir_banco():
                             Analise o seguinte trecho de uma diretriz/habilidade da BNCC e identifique quais são os conceitos técnicos, tópicos específicos, fórmulas ou matérias da FÍSICA e da CIÊNCIA (ex: velocidade média, MRU, aceleração, calorimetria, óptica, circuitos elétricos, etc.) que estão implicitamente ou explicitamente relacionados a ele. Devolva APENAS uma linha com esses termos técnicos separados por vírgula.
                             Trecho: {pedaco}
                             """
-                            modelo_flash = genai.GenerativeModel('gemini-2.5-flash')
+                            modelo_flash = genai.GenerativeModel('gemini-1.5-flash')
                             resposta_ia = modelo_flash.generate_content(prompt_enriquecimento)
                             termos_da_ia = resposta_ia.text.strip()
                             
@@ -256,7 +256,7 @@ def construir_banco():
                             print(f"    ⚠️ Erro na chamada interna do Gemini para enriquecimento: {e_gemini}")
 
                     resposta_emb = genai.embed_content(
-                        model="models/gemini-embedding-2",
+                        model="models/embedding-001",
                         content=texto_final_para_embedding, # Usa o texto enriquecido para o embedding
                         task_type="retrieval_document"
                     )

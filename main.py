@@ -25,7 +25,7 @@ load_dotenv(dotenv_path=os.path.join(project_root, ".env.local"))
 load_dotenv(dotenv_path=os.path.join(project_root, ".env")) # Carrega .env se .env.local não for encontrado ou para variáveis base
 # --- CONFIGURAÇÕES ---
 # RECOMENDAÇÃO DE SEGURANÇA: Use variáveis de ambiente para suas chaves!
-CHAVE_API_PINECONE = os.getenv("PINECONE_API_KEY") 
+CHAVE_API_PINECONE = os.getenv("PINECONE_API_KEY")  # Certifique-se de definir esta variável de ambiente
 CAMINHO_JSON_CREDENCIAIS = "credenciais.json"
 NOME_INDEX_PINECONE = "aulas-fisica"
 CHAVE_API_GEMINI = os.getenv("GEMINI_API_KEY")
@@ -115,7 +115,7 @@ def extrair_texto_de_pdf_com_visao(caminho_pdf):
     print(f"📸 Convertendo páginas do PDF em imagens para análise visual...")
     # Converte apenas as primeiras páginas ou o livro todo (cuidado com o limite de tokens)
     paginas = convert_from_path(caminho_pdf, dpi=150)
-    
+
     model = genai.GenerativeModel('gemini-2.5-flash')
     texto_completo_extraido = ""
     

@@ -1,6 +1,7 @@
 import os
 import io
 import time
+from dotenv import load_dotenv
 import chromadb
 from chromadb.api.types import Documents, EmbeddingFunction, Embeddings
 import google.genai as genai
@@ -13,28 +14,25 @@ from PIL import Image
 import pytesseract
 
 # --- 1. CONFIGURAÇÕES E CREDENCIAIS ---
-CHAVE_API_GEMINI = "AIzaSyDfoQTbsQ7_FAfgINeLivpMjcWUClUZPNM"
+load_dotenv(dotenv_path="../.env") # Carrega do .env na pasta pai
+CHAVE_API_GEMINI = os.getenv("GEMINI_API_KEY")
 ID_PASTA_TESTE_DRIVE = "1jZztziuVQ8e7jJqeBAUXiNP2XQT6fcCJ"
 CAMINHO_JSON_CREDENCIAIS = "credenciais.json"
 
-genai.configure(api_key=CHAVE_API_GEMINI)
+if not CHAVE_API_GEMINI:
+    raise ValueError("A variável de ambiente GEMINI_API_KEY não foi definida no arquivo .env")
+genai.api_key = CHAVE_API_GEMINI
 
 # --- 2. CONFIGURAR O BANCO DE DADOS VETORIAL (CHROMADB) ---
 # O ChromaDB precisa de uma função para transformar texto em números (vetores).
 # Vamos usar o modelo de Embeddings do Gemini (ótimo para português).
 class GeminiEmbeddingFunction(EmbeddingFunction):
     def __call__(self, input: Documents) -> Embeddings:
-        embeddings = []
-        for text in input:
-            resposta = genai.embed_content(
-                model="text-multilingual-embedding-002", # Modelo de embedding mais recente e recomendado
-                content=text,
-                task_type="retrieval_document"
-            )
-            embeddings.append(resposta['embedding'])
-            # Uma pequena pausa para não estourar o limite gratuito da API do Google
-            time.sleep(1) 
-        return embeddings
+        # Modelo de embedding mais recente e recomendado
+        model = 'models/embedding-001'
+        # O SDK agora pode processar uma lista de textos de uma vez
+        return genai.embed_content(model=model, content=input, task_type="retrieval_document")['embedding']
+
 print("⚙️ Inicializando Banco de Dados Local...")
 # Isso vai criar uma pasta chamada "meu_banco_vetorial" no seu projeto
 cliente_chroma = chromadb.PersistentClient(path="./meu_banco_vetorial")
