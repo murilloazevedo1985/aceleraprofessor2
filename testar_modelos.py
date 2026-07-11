@@ -1,15 +1,25 @@
-import google.genai as genai
 import os
+from dotenv import load_dotenv
+import google.genai as genai
 
-# Se estiver usando um arquivo .env, certifique-se de carregá-lo
-# ou substitua a linha abaixo pela sua chave real entre aspas
-CHAVE_API = os.getenv("GOOGLE_API_KEY", "AIzaSyDfoQTbsQ7_FAfgINeLivpMjcWUClUZPNM")
+# Carrega o arquivo .env se ele existir na pasta
+load_dotenv()
 
-genai.api_key = CHAVE_API
+# Busca a chave do arquivo .env (mudei para buscar a GEMINI_API_KEY que configuramos antes)
+CHAVE_API = os.getenv("GEMINI_API_KEY")
 
-print("🔍 Buscando modelos de Embedding suportados...\n")
+if not CHAVE_API:
+    print("❌ Erro: A chave GEMINI_API_KEY não foi encontrada no seu arquivo .env!")
+else:
+    print("🔍 Conectando à API da Google...")
+    genai.configure(api_key=CHAVE_API)
 
-# Varre todos os modelos do Google e filtra apenas os de Embedding
-for m in genai.list_models():
-    if 'embedContent' in m.supported_generation_methods:
-        print(f"✅ Modelo válido encontrado: {m.name}")
+    print("🔍 Buscando modelos suportados...\n")
+    
+    try:
+        # Varre e lista todos os modelos usando o formato correto
+        for m in genai.list_models():
+            print(f"-> {m.name}")
+            
+    except Exception as e:
+        print(f"❌ Ocorreu um erro ao listar: {e}")

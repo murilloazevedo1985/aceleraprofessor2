@@ -1,10 +1,9 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.concurrency import run_in_threadpool
-import firebase_admin
 from pydantic import BaseModel
-import google.genai as genai
 import json
+from google import genai
 import re
 import os
 from dotenv import load_dotenv
@@ -13,15 +12,17 @@ from pinecone import Pinecone
 import mimetypes 
 from duckduckgo_search import DDGS
 from pdf2image import convert_from_path
+import firebase_admin
 from firebase_admin import credentials, firestore, initialize_app, _apps
 import os
-import uvicorn
+import uvicorn 
+
 
 # Carrega as variáveis de ambiente.
 # Define o caminho para o diretório raiz do projeto para encontrar os arquivos .env
 project_root = os.path.dirname(__file__)
 # Procura primeiro por .env.local (ideal para desenvolvimento) e depois por .env.
-load_dotenv(dotenv_path=os.path.join(project_root, ".env.local"))
+load_dotenv(dotenv_path=os.path.join(project_root, ".env")) # Carrega .env se .env.local não for encontrado ou para variáveis base
 # --- CONFIGURAÇÕES ---
 # RECOMENDAÇÃO DE SEGURANÇA: Use variáveis de ambiente para suas chaves!
 CHAVE_API_PINECONE = os.getenv("PINECONE_API_KEY")  # Certifique-se de definir esta variável de ambiente
@@ -260,7 +261,7 @@ async def gerar_experimento_estrategico(dados: ExperimentoRequest):
 
         # 1. BUSCA VETORIAL DO EXPERIMENTO NO PINECONE
         res_emb_exp = await genai.embed_content_async(
-            model="models/gemini-embedding-2",
+            model="text-embedding-004",
             content=dados.tema,
             task_type="retrieval_query"
         )
@@ -398,7 +399,7 @@ async def gerar_plano(dados: PlanoRequest):
             texto_busca_bncc = f"habilidade da bncc para o {etapa_ensino_bncc} sobre {texto_busca}"
             
             res_emb_bncc = await genai.embed_content_async(
-                model="models/gemini-embedding-2",
+                model="text-embedding-004",
                 content=texto_busca_bncc,
                 task_type="retrieval_query"
             )
@@ -428,7 +429,7 @@ async def gerar_plano(dados: PlanoRequest):
         # 3. BUSCA DE CONTEÚDO TÉCNICO (Sempre via Pinecone)
         print("   - Buscando conteúdo de Física no Pinecone...")
         res_emb_fisica = await genai.embed_content_async(
-            model="models/gemini-embedding-2",
+            model="text-embedding-004",
             content=texto_busca,
             task_type="retrieval_query"
         )
