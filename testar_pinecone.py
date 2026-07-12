@@ -120,7 +120,7 @@ def testar_memoria_pinecone():
         print("🧠 Gerando vetor de teste com o Gemini...")
         termo_busca = "Leis de Newton, forças, gravitação e competências da educação básica"
         resposta_emb = genai.embed_content(
-            model="models/embedding-001",
+            model="text-embedding-004",
             content=termo_busca,
             task_type="retrieval_query"
         )

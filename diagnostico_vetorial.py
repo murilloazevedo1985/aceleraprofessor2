@@ -23,7 +23,7 @@ print(f"🔬 INICIANDO DIAGNÓSTICO VETORIAL PARA: '{TERMO_USUARIO}'\n")
 
 # Passo 1: Gerar o embedding da busca
 resposta_emb = genai.embed_content(
-    model="models/embedding-001",
+    model="text-embedding-004",
     content=TERMO_USUARIO,
     task_type="retrieval_query"
 )

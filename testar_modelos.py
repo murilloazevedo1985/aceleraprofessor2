@@ -12,7 +12,7 @@ if not CHAVE_API:
     print("❌ Erro: A chave GEMINI_API_KEY não foi encontrada no seu arquivo .env!")
 else:
     print("🔍 Conectando à API da Google...")
-    genai.configure(api_key=CHAVE_API)
+    genai.api_key = CHAVE_API
 
     print("🔍 Buscando modelos suportados...\n")
     

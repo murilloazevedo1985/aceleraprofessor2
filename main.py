@@ -8,7 +8,7 @@ import re
 import os
 from dotenv import load_dotenv
 from googlesearch import search
-from pinecone import Pinecone
+from pinecone import Pinecone, client
 import mimetypes 
 from duckduckgo_search import DDGS
 from pdf2image import convert_from_path
@@ -17,7 +17,15 @@ from firebase_admin import credentials, firestore, initialize_app, _apps
 import os
 import uvicorn 
 
+load_dotenv() # <--- Isso avisa o Python para ler o arquivo .env
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
+print("🔍 Buscando modelos suportados...\n")
+
+# Agora o loop correto que não dá erro:
+for m in client.models.list():
+    print(m.name)
+    
 # Carrega as variáveis de ambiente.
 # Define o caminho para o diretório raiz do projeto para encontrar os arquivos .env
 project_root = os.path.dirname(__file__)
@@ -425,14 +433,14 @@ async def gerar_plano(dados: PlanoRequest):
                 print(f"   - Fallback encontrou {len(textos_bncc_fallback)} habilidade(s) relevante(s).")
             else:
                 print("   - Fallback da BNCC não encontrou resultados.")
+                # 3. BUSCA DE CONTEÚDO TÉCNICO (Sempre via Pinecone)
+                print("   - Buscando conteúdo de Física no Pinecone...")
+                res_emb_fisica = await client.aio.models.embed_content(
+                    model="text-embedding-004",
+                    contents=texto_busca,  # Atenção: na biblioteca nova mudou de 'content' para 'contents' (com S no final)
+                    config={"task_type": "RETRIEVAL_QUERY"}  # O task_type agora entra dentro de uma configuração em maiúsculo
+                )
 
-        # 3. BUSCA DE CONTEÚDO TÉCNICO (Sempre via Pinecone)
-        print("   - Buscando conteúdo de Física no Pinecone...")
-        res_emb_fisica = await genai.embed_content_async(
-            model="text-embedding-004",
-            content=texto_busca,
-            task_type="retrieval_query"
-        )
         vetor_busca_fisica = res_emb_fisica['embedding']
 
         resultados_fisica = await run_in_threadpool(

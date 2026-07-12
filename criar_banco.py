@@ -18,7 +18,6 @@ from firebase_admin import credentials, firestore, initialize_app, _apps
 project_root = os.path.dirname(__file__)
 # Carrega as variáveis de ambiente.
 # Procura primeiro por .env.local (ideal para desenvolvimento) e depois por .env.
-load_dotenv(dotenv_path=os.path.join(project_root, ".env.local"))
 load_dotenv(dotenv_path=os.path.join(project_root, ".env")) # Carrega .env se .env.local não for encontrado ou para variáveis base
 # --- 1. CONFIGURAÇÕES E CREDENCIAIS ---
 CHAVE_API_GEMINI = os.getenv("GEMINI_API_KEY")
@@ -263,7 +262,7 @@ def construir_banco():
                             print(f"    ⚠️ Erro na chamada interna do Gemini para enriquecimento: {e_gemini}")
 
                     resposta_emb = genai.embed_content(
-                        model="models/embedding-001",
+                        model="text-embedding-004",
                         content=texto_final_para_embedding, # Usa o texto enriquecido para o embedding
                         task_type="retrieval_document"
                     )
