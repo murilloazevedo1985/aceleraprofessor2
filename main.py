@@ -8,7 +8,7 @@ import re
 import os
 from dotenv import load_dotenv
 from googlesearch import search
-from pinecone import Pinecone, client
+from pinecone import Pinecone
 import mimetypes 
 from duckduckgo_search import DDGS
 from pdf2image import convert_from_path
@@ -51,6 +51,7 @@ pc = Pinecone(api_key=CHAVE_API_PINECONE)
 index = pc.Index(NOME_INDEX_PINECONE)
 
 # --- NOVA CONFIGURAÇÃO: FIREBASE ADMIN SDK ---
+db = None  # Inicializa como None; será definido se a conexão for bem-sucedida
 print("🔥 Conectando ao Firebase (Firestore)...")
 try:
     # Evita reinicializar o app se já estiver inicializado (útil em ambientes de reload)
@@ -69,7 +70,8 @@ try:
     db = firestore.client()
     print("✅ Conectado ao Firestore com sucesso.")
 except Exception as e:
-    print(f"❌ Erro ao conectar com o Firebase: {e}. Verifique se o arquivo '{CAMINHO_JSON_CREDENCIAIS}' está correto.")
+    print(f"⚠️  Firestore indisponível: {e}")
+    print("   As funcionalidades de avaliação e galeria estarão desativadas.")
 
 app = FastAPI()
 app.add_middleware(
@@ -268,12 +270,12 @@ async def gerar_experimento_estrategico(dados: ExperimentoRequest):
         print(f"\n🔬 Iniciando busca de experimento para o tema: '{dados.tema}'")
 
         # 1. BUSCA VETORIAL DO EXPERIMENTO NO PINECONE
-        res_emb_exp = await genai.embed_content_async(
-            model="text-embedding-004",
-            content=dados.tema,
-            task_type="retrieval_query"
+        res_emb_exp = await client.aio.models.embed_content(
+            model="gemini-embedding-2",
+            contents=dados.tema,
+            config={"task_type": "RETRIEVAL_QUERY"}
         )
-        vetor_busca_exp = res_emb_exp['embedding']
+        vetor_busca_exp = res_emb_exp.embeddings[0].values
 
         # Assumindo que os experimentos estão tagueados com "tipo": "experimento_fisica"
         resultados_exp = await run_in_threadpool(
@@ -372,8 +374,11 @@ async def gerar_experimento_estrategico(dados: ExperimentoRequest):
         Gere um objeto JSON contendo o nome do experimento e uma lista com as estratégias sugeridas e suas justificativas. A resposta deve ser apenas o JSON puro.
         """
 
-        model = genai.GenerativeModel('gemini-2.5-flash')
-        resposta = await model.generate_content_async(prompt, generation_config={"response_mime_type": "application/json"})
+        resposta = await client.aio.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt,
+            config={"response_mime_type": "application/json"}
+        )
 
         print("✅ Análise pedagógica gerada com sucesso!")
         return json.loads(resposta.text)
@@ -406,12 +411,12 @@ async def gerar_plano(dados: PlanoRequest):
             etapa_ensino_bncc = "ensino médio" if "médio" in dados.turma.lower() else "ensino fundamental"
             texto_busca_bncc = f"habilidade da bncc para o {etapa_ensino_bncc} sobre {texto_busca}"
             
-            res_emb_bncc = await genai.embed_content_async(
-                model="text-embedding-004",
-                content=texto_busca_bncc,
-                task_type="retrieval_query"
+            res_emb_bncc = await client.aio.models.embed_content(
+                model="gemini-embedding-2",
+                contents=texto_busca_bncc,
+                config={"task_type": "RETRIEVAL_QUERY"}
             )
-            vetor_busca_bncc = res_emb_bncc['embedding']
+            vetor_busca_bncc = res_emb_bncc.embeddings[0].values
 
             etapa_filtro = "Ensino Médio" if "médio" in dados.turma.lower() else "Ensino Fundamental"
             resultados_bncc = await run_in_threadpool(
@@ -433,15 +438,15 @@ async def gerar_plano(dados: PlanoRequest):
                 print(f"   - Fallback encontrou {len(textos_bncc_fallback)} habilidade(s) relevante(s).")
             else:
                 print("   - Fallback da BNCC não encontrou resultados.")
-                # 3. BUSCA DE CONTEÚDO TÉCNICO (Sempre via Pinecone)
-                print("   - Buscando conteúdo de Física no Pinecone...")
-                res_emb_fisica = await client.aio.models.embed_content(
-                    model="text-embedding-004",
-                    contents=texto_busca,  # Atenção: na biblioteca nova mudou de 'content' para 'contents' (com S no final)
-                    config={"task_type": "RETRIEVAL_QUERY"}  # O task_type agora entra dentro de uma configuração em maiúsculo
-                )
 
-        vetor_busca_fisica = res_emb_fisica['embedding']
+        # 3. BUSCA DE CONTEÚDO TÉCNICO (Sempre via Pinecone - executado independentemente da BNCC)
+        print("   - Buscando conteúdo de Física no Pinecone...")
+        res_emb_fisica = await client.aio.models.embed_content(
+            model="gemini-embedding-2",
+            contents=texto_busca,
+            config={"task_type": "RETRIEVAL_QUERY"}
+        )
+        vetor_busca_fisica = res_emb_fisica.embeddings[0].values
 
         resultados_fisica = await run_in_threadpool(
             index.query,
@@ -714,10 +719,10 @@ async def gerar_plano(dados: PlanoRequest):
         
 
         print("🧠 IA gerando plano final...")
-        model = genai.GenerativeModel('gemini-2.5-flash') # Using the latest flash model
-        resposta = await model.generate_content_async(
-            prompt,
-            generation_config={
+        resposta = await client.aio.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt,
+            config={
                 "response_mime_type": "application/json",
                 "temperature": 0.0
             }
@@ -792,10 +797,11 @@ async def buscar_e_anexar_link_simulacao(plano_json: dict):
 
     link_final = None
     try:
-        print(f"⚡️ Executando busca assíncrona no DuckDuckGo: '{query_sim}'")
+        print(f"⚡️ Executando busca no DuckDuckGo: '{query_sim}'")
         ddgs = DDGS()
-        # Usar atext para busca assíncrona
-        resultados_sim = await ddgs.atext(query_sim, max_results=1)
+        # A versão atual do pacote removeu o método assíncrono atext.
+        # Usamos run_in_threadpool para não bloquear o event loop.
+        resultados_sim = await run_in_threadpool(ddgs.text, query_sim, max_results=1)
         
         if resultados_sim:
             link_final = resultados_sim[0].get('href')
@@ -814,6 +820,10 @@ async def avaliar_estrategia(dados: AvaliacaoRequest):
     """
     Recebe a avaliação de uma estratégia e a salva no Firestore.
     """
+    if db is None:
+        print("⚠️  Avaliação ignorada: Firestore não está configurado.")
+        return {"status": "ignorado", "mensagem": "Banco de dados indisponível. A avaliação não foi salva."}
+
     try:
         print(f"✍️ Recebendo avaliação de {dados.nota} estrelas para o tema '{dados.tema}'...")
         
@@ -843,7 +853,12 @@ async def avaliar_estrategia(dados: AvaliacaoRequest):
 async def get_melhores_estrategias():
     """
     Recupera as 10 estratégias mais recentes com 4 ou 5 estrelas.
+    Retorna lista vazia se o Firestore não estiver configurado ou inacessível.
     """
+    if db is None:
+        print("⚠️  Firestore não configurado. Retornando lista vazia.")
+        return []
+
     try:
         print("🏆 Buscando as melhores estratégias no Firestore...")
         avaliacoes_ref = db.collection('avaliacoes')
@@ -856,5 +871,12 @@ async def get_melhores_estrategias():
         
         return estrategias
     except Exception as e:
+        error_str = str(e)
+        # Se o banco não existe (404), retorna lista vazia sem causar erro no frontend
+        if "does not exist" in error_str or "404" in error_str:
+            print(f"⚠️  Banco Firestore não encontrado. Retornando lista vazia. Detalhe: {e}")
+            print("   👉 Crie o banco em: https://console.cloud.google.com/datastore/setup?project=gen-lang-client-0555465572")
+            return []
         print(f"❌ Erro ao buscar melhores estratégias: {e}")
         raise HTTPException(status_code=500, detail="Erro ao buscar as melhores estratégias.")
+

@@ -265,7 +265,7 @@ export default function EstrategiasPedagogicas() {
       turma: `${audience} (${classSize})`,
       recursos: [
         ...selectedIT,
-        labAccess,
+        ...labAccess,
         ...selectedMaterials
       ].filter(Boolean),
       tom_abordagem: tomAbordagem, // NOVO CAMPO ENVIADO
