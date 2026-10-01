@@ -153,6 +153,7 @@ export interface TeacherInput {
 export interface LessonStep {
   time: string;
   title: string;
+  approach: string;
   description: string;
   teacherRole: string;
   studentRole: string;
@@ -181,6 +182,7 @@ export interface LessonPlanResponse {
   learningObjectives: string[];
   requiredMaterials: string[];
   methodology: string;
+  methodologyDetails?: string;
   steps: LessonStep[];
   discussionTopics: string[];
   assessment: string;

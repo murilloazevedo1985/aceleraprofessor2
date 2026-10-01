@@ -2,8 +2,14 @@ from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
+from datetime import datetime, timezone
+from uuid import uuid4
+import io
 import json
 from google import genai
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload
 import re
 import os
 from dotenv import load_dotenv
@@ -12,66 +18,83 @@ from pinecone import Pinecone
 import mimetypes 
 from duckduckgo_search import DDGS
 from pdf2image import convert_from_path
-import firebase_admin
-from firebase_admin import credentials, firestore, initialize_app, _apps
 import os
 import uvicorn 
+import json
+import os
+from dotenv import load_dotenv
+from google import genai
+from pinecone import Pinecone
 
-load_dotenv() # <--- Isso avisa o Python para ler o arquivo .env
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-
-print("🔍 Buscando modelos suportados...\n")
-
-# Agora o loop correto que não dá erro:
-for m in client.models.list():
-    print(m.name)
-    
-# Carrega as variáveis de ambiente.
-# Define o caminho para o diretório raiz do projeto para encontrar os arquivos .env
+# --- CONFIGURAÇÕES E VARIÁVEIS DE AMBIENTE ---
+# Carrega as variáveis do arquivo .env ou .env.local
 project_root = os.path.dirname(__file__)
-# Procura primeiro por .env.local (ideal para desenvolvimento) e depois por .env.
-load_dotenv(dotenv_path=os.path.join(project_root, ".env")) # Carrega .env se .env.local não for encontrado ou para variáveis base
-# --- CONFIGURAÇÕES ---
-# RECOMENDAÇÃO DE SEGURANÇA: Use variáveis de ambiente para suas chaves!
-CHAVE_API_PINECONE = os.getenv("PINECONE_API_KEY")  # Certifique-se de definir esta variável de ambiente
-CAMINHO_JSON_CREDENCIAIS = "credenciais.json"
-NOME_INDEX_PINECONE = "aulas-fisica"
+env_path = os.path.join(project_root, ".env.local")
+
+if os.path.exists(env_path):
+    load_dotenv(dotenv_path=env_path)
+else:
+    load_dotenv(dotenv_path=os.path.join(project_root, ".env"))
+
+# Resgate e validação das chaves
+CHAVE_API_PINECONE = os.getenv("PINECONE_API_KEY")
 CHAVE_API_GEMINI = os.getenv("GEMINI_API_KEY")
+CAMINHO_JSON_CREDENCIAIS = os.getenv(
+    "GOOGLE_APPLICATION_CREDENTIALS",
+    os.path.join(project_root, "credenciais.json"),
+)
+NOME_INDEX_PINECONE = "aulas-fisica"
+ID_PASTA_CONTEXTO_DRIVE = os.getenv(
+    "GOOGLE_DRIVE_CONTEXT_FOLDER_ID",
+    "1jZztziuVQ8e7jJqeBAUXiNP2XQT6fcCJ",
+)
+ID_PASTA_PLANOS_DRIVE = os.getenv("GOOGLE_DRIVE_PLANS_FOLDER_ID")
+NOME_PASTA_PLANOS_DRIVE = "Planos gerados"
+PREFIXO_ARQUIVO_PLANO = "aceleraprofessor_plano_"
 
 if not CHAVE_API_PINECONE:
     raise ValueError("A variável de ambiente PINECONE_API_KEY não foi definida.")
 if not CHAVE_API_GEMINI:
     raise ValueError("A variável de ambiente GEMINI_API_KEY não foi definida.")
 
-genai.api_key = CHAVE_API_GEMINI
+# --- INICIALIZAÇÃO DO GEMINI (google-genai) ---
+# Instancia o cliente usando a chave validada
+client = genai.Client(api_key=CHAVE_API_GEMINI)
 
-# Conexão com o Pinecone na Nuvem
+print("🔍 Buscando modelos suportados pelo Gemini...\n")
+try:
+    for m in client.models.list():
+        print(m.name)
+except Exception as e:
+    print(f"⚠️ Erro ao listar modelos do Gemini: {e}")
+
+# --- CONEXÃO COM O PINECONE ---
 print("🔌 Conectando ao Pinecone...")
 pc = Pinecone(api_key=CHAVE_API_PINECONE)
 index = pc.Index(NOME_INDEX_PINECONE)
 
-# --- NOVA CONFIGURAÇÃO: FIREBASE ADMIN SDK ---
-db = None  # Inicializa como None; será definido se a conexão for bem-sucedida
-print("🔥 Conectando ao Firebase (Firestore)...")
+# --- CONEXÃO COM A PASTA DE CONTEXTO NO GOOGLE DRIVE ---
+drive_service = None
+print("📁 Conectando ao Google Drive...")
 try:
-    # Evita reinicializar o app se já estiver inicializado (útil em ambientes de reload)
-    firebase_creds_json_str = os.getenv("FIREBASE_CREDENTIALS_JSON")
-    if not _apps:
-        if firebase_creds_json_str:
-            # Ambiente de nuvem: carrega as credenciais da variável de ambiente
-            print("   - Carregando credenciais do Firebase via variável de ambiente.")
-            creds_dict = json.loads(firebase_creds_json_str)
-            cred = credentials.Certificate(creds_dict)
-        else:
-            # Ambiente local: carrega do arquivo credenciais.json
-            print(f"   - Carregando credenciais do Firebase do arquivo '{CAMINHO_JSON_CREDENCIAIS}'.")
-            cred = credentials.Certificate(CAMINHO_JSON_CREDENCIAIS)
-        initialize_app(cred)
-    db = firestore.client()
-    print("✅ Conectado ao Firestore com sucesso.")
+    drive_credentials_json = (
+        os.getenv("GOOGLE_DRIVE_CREDENTIALS_JSON")
+        or os.getenv("FIREBASE_CREDENTIALS_JSON")
+    )
+    if drive_credentials_json:
+        drive_credentials = service_account.Credentials.from_service_account_info(
+            json.loads(drive_credentials_json),
+            scopes=["https://www.googleapis.com/auth/drive"],
+        )
+    else:
+        drive_credentials = service_account.Credentials.from_service_account_file(
+            CAMINHO_JSON_CREDENCIAIS,
+            scopes=["https://www.googleapis.com/auth/drive"],
+        )
+    drive_service = build("drive", "v3", credentials=drive_credentials, cache_discovery=False)
+    print(f"✅ Google Drive pronto. Pasta de planos/contexto: {ID_PASTA_CONTEXTO_DRIVE}")
 except Exception as e:
-    print(f"⚠️  Firestore indisponível: {e}")
-    print("   As funcionalidades de avaliação e galeria estarão desativadas.")
+    print(f"⚠️  Google Drive indisponível: {e}")
 
 app = FastAPI()
 app.add_middleware(
@@ -81,6 +104,116 @@ app.add_middleware(
     allow_methods=["*"], # Permite POST, GET, etc.
     allow_headers=["*"],
 )
+
+
+def _media_json_drive(documento: dict) -> MediaIoBaseUpload:
+    conteudo = json.dumps(documento, ensure_ascii=False).encode("utf-8")
+    return MediaIoBaseUpload(io.BytesIO(conteudo), mimetype="application/json", resumable=False)
+
+
+def _obter_id_pasta_planos_drive() -> str:
+    if drive_service is None:
+        raise RuntimeError("Google Drive indisponível.")
+
+    if ID_PASTA_PLANOS_DRIVE:
+        pasta = drive_service.files().get(
+            fileId=ID_PASTA_PLANOS_DRIVE,
+            fields="id,name,mimeType,parents",
+            supportsAllDrives=True,
+        ).execute()
+    else:
+        query = (
+            f"'{ID_PASTA_CONTEXTO_DRIVE}' in parents and "
+            f"name = '{NOME_PASTA_PLANOS_DRIVE}' and "
+            "mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+        )
+        pastas = drive_service.files().list(
+            q=query,
+            fields="files(id,name,mimeType,parents)",
+            pageSize=10,
+            includeItemsFromAllDrives=True,
+            supportsAllDrives=True,
+        ).execute().get("files", [])
+        if len(pastas) != 1:
+            raise RuntimeError(
+                f"Crie uma única subpasta '{NOME_PASTA_PLANOS_DRIVE}' dentro da pasta de contexto "
+                "e compartilhe-a com a conta de serviço como Editor."
+            )
+        pasta = pastas[0]
+
+    if (
+        pasta.get("name") != NOME_PASTA_PLANOS_DRIVE
+        or pasta.get("mimeType") != "application/vnd.google-apps.folder"
+        or ID_PASTA_CONTEXTO_DRIVE not in pasta.get("parents", [])
+    ):
+        raise RuntimeError(
+            f"A pasta configurada precisa ser '{NOME_PASTA_PLANOS_DRIVE}' e filha direta da pasta de contexto."
+        )
+    return pasta["id"]
+
+
+def _criar_arquivo_plano_drive(documento: dict) -> dict:
+    nome_arquivo = f"{PREFIXO_ARQUIVO_PLANO}{uuid4().hex}.json"
+    return drive_service.files().create(
+        body={
+            "name": nome_arquivo,
+            "mimeType": "application/json",
+            "parents": [_obter_id_pasta_planos_drive()],
+        },
+        media_body=_media_json_drive(documento),
+        fields="id,name",
+        supportsAllDrives=True,
+    ).execute()
+
+
+def _metadados_arquivo_drive(file_id: str) -> dict:
+    return drive_service.files().get(
+        fileId=file_id,
+        fields="id,name,mimeType,parents",
+        supportsAllDrives=True,
+    ).execute()
+
+
+def _ler_json_drive(file_id: str) -> dict:
+    conteudo = drive_service.files().get(
+        fileId=file_id,
+        alt="media",
+        supportsAllDrives=True,
+    ).execute()
+    return json.loads(conteudo.decode("utf-8") if isinstance(conteudo, bytes) else conteudo)
+
+
+def _atualizar_arquivo_plano_drive(file_id: str, documento: dict) -> None:
+    drive_service.files().update(
+        fileId=file_id,
+        media_body=_media_json_drive(documento),
+        supportsAllDrives=True,
+        fields="id",
+    ).execute()
+
+
+def _listar_arquivos_plano_drive() -> list[dict]:
+    pasta_planos_id = _obter_id_pasta_planos_drive()
+    query = (
+        f"'{pasta_planos_id}' in parents and "
+        f"name contains '{PREFIXO_ARQUIVO_PLANO}' and trashed = false"
+    )
+    arquivos = []
+    page_token = None
+    while True:
+        resultado = drive_service.files().list(
+            q=query,
+            fields="nextPageToken,files(id,name,createdTime)",
+            pageSize=1000,
+            pageToken=page_token,
+            orderBy="createdTime desc",
+            includeItemsFromAllDrives=True,
+            supportsAllDrives=True,
+        ).execute()
+        arquivos.extend(resultado.get("files", []))
+        page_token = resultado.get("nextPageToken")
+        if not page_token:
+            return arquivos
 
 # --- MODELOS DE ENTRADA ---
 class PerguntaRequest(BaseModel):
@@ -135,7 +268,7 @@ def extrair_texto_de_pdf_com_visao(caminho_pdf):
     # Converte apenas as primeiras páginas ou o livro todo (cuidado com o limite de tokens)
     paginas = convert_from_path(caminho_pdf, dpi=150)
 
-    model = genai.GenerativeModel('gemini-2.5-flash')
+    model = genai.GenerativeModel('gemini-2.0-Flash')
     texto_completo_extraido = ""
     
     for i, pagina in enumerate(paginas):
@@ -247,7 +380,7 @@ async def extrair_latex_imagem(file: UploadFile = File(...)):
         """
 
         # 4. Gera o conteúdo usando o modelo multimodal
-        model = genai.GenerativeModel('gemini-2.5-flash')
+        model = genai.GenerativeModel('gemini-2.0-flash')
         response = await model.generate_content_async(
             [prompt, imagem_pagina],
             generation_config={"temperature": 0.0}
@@ -375,7 +508,7 @@ async def gerar_experimento_estrategico(dados: ExperimentoRequest):
         """
 
         resposta = await client.aio.models.generate_content(
-            model='gemini-2.5-flash',
+            model='gemini-2.0-flash',
             contents=prompt,
             config={"response_mime_type": "application/json"}
         )
@@ -392,6 +525,12 @@ async def gerar_experimento_estrategico(dados: ExperimentoRequest):
 @app.post("/gerar-plano")
 async def gerar_plano(dados: PlanoRequest):
     try:
+        if drive_service is None:
+            raise HTTPException(
+                status_code=503,
+                detail="Google Drive indisponível. O plano não pode ser salvo na pasta de contexto.",
+            )
+
         # Combina tema e fenômeno para uma busca mais precisa
         texto_busca = f"{dados.tema} - {dados.fenomeno}" if dados.fenomeno else dados.tema
         print(f"\n🚀 Iniciando geração de plano para: '{texto_busca}'...")
@@ -411,7 +550,8 @@ async def gerar_plano(dados: PlanoRequest):
             etapa_ensino_bncc = "ensino médio" if "médio" in dados.turma.lower() else "ensino fundamental"
             texto_busca_bncc = f"habilidade da bncc para o {etapa_ensino_bncc} sobre {texto_busca}"
             
-            res_emb_bncc = await client.aio.models.embed_content(
+            res_emb_bncc = await run_in_threadpool(
+                client.models.embed_content,
                 model="gemini-embedding-2",
                 contents=texto_busca_bncc,
                 config={"task_type": "RETRIEVAL_QUERY"}
@@ -441,7 +581,8 @@ async def gerar_plano(dados: PlanoRequest):
 
         # 3. BUSCA DE CONTEÚDO TÉCNICO (Sempre via Pinecone - executado independentemente da BNCC)
         print("   - Buscando conteúdo de Física no Pinecone...")
-        res_emb_fisica = await client.aio.models.embed_content(
+        res_emb_fisica = await run_in_threadpool(
+            client.models.embed_content,
             model="gemini-embedding-2",
             contents=texto_busca,
             config={"task_type": "RETRIEVAL_QUERY"}
@@ -500,18 +641,10 @@ async def gerar_plano(dados: PlanoRequest):
 
         # --- NOVAS DIRETRIZES PEDAGÓGICAS (DA SUA SOLICITAÇÃO) ---
         instrucao_estrategias_variadas = """
-        [DIRETRIZ DE ESTRATÉGIA PEDAGÓGICA]
-        Ao criar os passos da aula, você deve OBRIGATORIAMENTE variar as abordagens. Escolha pelo menos duas abordagens DIFERENTES da lista abaixo e aplique-as nos passos da aula. Cada estratégia deve incluir uma atividade prática (hands-on) para os alunos.
-        - Exposição dialógica com quadro e giz
-        - Demonstração qualitativa de fenômeno físico
-        - Sala de aula invertida (alunos estudam antes e aplicam em aula)
-        - Aprendizagem baseada em problemas (PBL)
-        - Gamificação ou simulação interativa
-        - Discussão em pequenos grupos com experimento rápido
-        - Modelagem matemática com dados reais (ex: usando filmagem com celular e análise no computador)
-        - Peer instruction (instrução por pares)
-        [DIRETRIZ DE ESTRATÉGIA PEDAGÓGICA MODERNA]
-        Você é um especialista em pedagogias ativas e deve OBRIGATORIAMENTE basear os passos da aula em uma ou mais das estratégias listadas abaixo. Você está PROIBIDO de sugerir aulas expositivas, com quadro e giz ou puramente orais.
+        [DIRETRIZ CENTRAL DE ESTRATÉGIA PEDAGÓGICA]
+        As dez estratégias descritas abaixo são o repertório disponível. NÃO tente usar todas em uma única aula: escolha uma estratégia principal e, somente quando houver complementaridade clara, uma estratégia secundária. Baseie a escolha no tema, na etapa/turma, no tom solicitado, nos recursos disponíveis e especialmente no campo "Conteúdo Recomendado" de cada estratégia. Se a recomendação não combinar com o tema, escolha a alternativa mais adequada e explique a razão; não force uma associação.
+        O campo "methodology" deve conter somente o nome da estratégia principal (e, se aplicável, o nome da complementar). O campo "methodologyDetails" deve ser o destaque pedagógico do plano: explique por que a estratégia combina com este tema e turma, como o professor a conduz do início ao fechamento, o que os alunos fazem, quais recursos permitidos são usados e como o professor verifica a aprendizagem. Seja específico para o tema desta solicitação, não escreva uma definição genérica da metodologia.
+        Organize os passos como fases coerentes da estratégia escolhida. Em cada etapa, informe uma abordagem em "approach", ações concretas do professor em "teacherRole", ações dos alunos em "studentRole" e, em "description", o procedimento prático, a organização da turma, o resultado esperado e como a etapa prepara a seguinte. Não invente materiais fora dos recursos disponíveis. Evite aula puramente expositiva; toda explicação deve estar ligada a uma tarefa, observação, discussão ou produção dos alunos.
 
         **ESTRATÉGIA 1: POE (Predict-Observe-Explain)**
         - Descrição: Alunos predizem o resultado de um fenômeno, observam e depois explicam as discrepâncias.
@@ -564,9 +697,9 @@ async def gerar_plano(dados: PlanoRequest):
         - Conteúdo Recomendado: Resolução de problemas em Mecânica, Eletrodinâmica, Termodinâmica.
 
         [REGRAS DE APLICAÇÃO]
-        1. Varie as estratégias: Use pelo menos duas abordagens diferentes da lista acima nos passos da aula.
-        2. Atividade Prática Obrigatória: Cada passo deve conter uma atividade prática (hands-on).
-        3. Descrição Clara: Descreva cada passo em 4 a 5 linhas, de forma direta para o professor.
+        1. Não use automaticamente duas estratégias: mantenha uma estratégia principal e só acrescente uma complementar se ela melhorar a sequência didática.
+        2. Cada passo deve operacionalizar a estratégia escolhida, com instruções claras que o professor consiga aplicar e uma ação observável dos alunos.
+        3. Descreva cada passo em 4 a 6 frases curtas, específicas para o tema, incluindo mediação do professor, participação dos alunos e evidência de aprendizagem.
         """
 
         # 4. Prompt Unificado para o Gemini
@@ -684,7 +817,8 @@ async def gerar_plano(dados: PlanoRequest):
         ```json
         {{
           "title": "Título da Aula sobre {dados.tema}",
-          "methodology": "O nome da estratégia pedagógica principal usada (Ex: 'Modelo 7E', 'Instrução por Pares', 'Aprendizagem Baseada em Problemas').",
+          "methodology": "Nome da estratégia pedagógica principal e, se houver, da estratégia complementar.",
+          "methodologyDetails": "Justificativa e aplicação da estratégia neste tema e turma: adequação à recomendação, sequência de condução pelo professor, ações dos alunos, recursos utilizados e verificação da aprendizagem.",
           "duration": "Duração Total (Ex: 90 min)",
           "learningObjectives": ["Objetivo 1", "Objetivo 2"],
           "competenciasBnccAplicadas": ["Competência da BNCC relacionada ao tema", "Habilidade da BNCC relacionada ao tema"],
@@ -693,10 +827,10 @@ async def gerar_plano(dados: PlanoRequest):
             {{
               "time": "Tempo em min",
               "title": "Título do Passo",
-              "approach": "Nome da abordagem usada neste passo (Ex: 'Aprendizagem Baseada em Problemas')",
-              "description": "Descrição detalhada do passo em 4 a 5 linhas. Use exemplos práticos do dia a dia antes de teorias densas e inclua uma atividade prática (hands-on).",
-              "teacherRole": "Ação específica do docente neste passo.",
-              "studentRole": "Ação específica do estudante neste passo."
+              "approach": "Nome da estratégia ou fase da metodologia aplicada neste passo.",
+              "description": "Procedimento específico do passo, com organização, recursos permitidos, produto esperado e ligação com a próxima fase.",
+              "teacherRole": "Instruções e mediação concretas do professor durante este passo.",
+              "studentRole": "Ações observáveis dos alunos e o que devem discutir, registrar, construir ou explicar."
             }}
           ],
           "simulacaoSugerida": {{
@@ -719,13 +853,14 @@ async def gerar_plano(dados: PlanoRequest):
         
 
         print("🧠 IA gerando plano final...")
-        resposta = await client.aio.models.generate_content(
-            model='gemini-2.5-flash',
+        resposta = await run_in_threadpool(
+            client.models.generate_content,
+            model="gemini-3.8-flash",
             contents=prompt,
             config={
                 "response_mime_type": "application/json",
-                "temperature": 0.0
-            }
+                "temperature": 0.0,
+            },
         )
         
         # --- CORREÇÃO CIRÚRGICA PARA LATEX ---
@@ -753,11 +888,27 @@ async def gerar_plano(dados: PlanoRequest):
         if "videoYoutube" not in plano_json:
             plano_json["videoYoutube"] = None
 
+        criado_em = datetime.now(timezone.utc).isoformat()
+        registro_plano = {
+            "plano": plano_json,
+            "tema": dados.tema,
+            "nota": None,
+            "criado_em": criado_em,
+            "avaliado_em": None,
+        }
+        arquivo_plano = await run_in_threadpool(_criar_arquivo_plano_drive, registro_plano)
+        plano_json["driveFileId"] = arquivo_plano["id"]
+
         print("✅ Tudo pronto! Enviando para o professor.")
         return plano_json
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"Erro ao gerar plano: {e}")
-        raise HTTPException(status_code=500, detail="Erro interno ao gerar plano.")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro interno ao gerar plano: {e}",
+        ) from e
 
 async def buscar_e_anexar_link_simulacao(plano_json: dict):
     """Busca o link de uma simulação sugerida e anexa ao JSON."""
@@ -818,65 +969,116 @@ async def buscar_e_anexar_link_simulacao(plano_json: dict):
 @app.post("/avaliar-estrategia")
 async def avaliar_estrategia(dados: AvaliacaoRequest):
     """
-    Recebe a avaliação de uma estratégia e a salva no Firestore.
+    Atualiza no Google Drive a avaliação do plano correspondente.
     """
-    if db is None:
-        print("⚠️  Avaliação ignorada: Firestore não está configurado.")
-        return {"status": "ignorado", "mensagem": "Banco de dados indisponível. A avaliação não foi salva."}
+    if drive_service is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Google Drive indisponível. A avaliação não foi salva.",
+        )
 
     try:
         print(f"✍️ Recebendo avaliação de {dados.nota} estrelas para o tema '{dados.tema}'...")
-        
-        # Cria uma referência para a coleção 'avaliacoes'
-        avaliacoes_ref = db.collection('avaliacoes')
-        
-        # Adiciona um novo documento com um ID gerado automaticamente
-        # Inclui um timestamp do servidor para ordenação futura
-        await run_in_threadpool(
-            avaliacoes_ref.add,
-            {
-                'plano': dados.plano,
-                'nota': dados.nota,
-                'tema': dados.tema,
-                'timestamp': firebase_admin.firestore.SERVER_TIMESTAMP
+
+        drive_file_id = dados.plano.get("driveFileId")
+        plano = {key: value for key, value in dados.plano.items() if key != "driveFileId"}
+        avaliado_em = datetime.now(timezone.utc).isoformat()
+
+        if drive_file_id:
+            pasta_planos_id = await run_in_threadpool(_obter_id_pasta_planos_drive)
+            metadados = await run_in_threadpool(_metadados_arquivo_drive, drive_file_id)
+            if (
+                pasta_planos_id not in metadados.get("parents", [])
+                or not metadados.get("name", "").startswith(PREFIXO_ARQUIVO_PLANO)
+            ):
+                raise HTTPException(status_code=400, detail="O arquivo do plano não pertence à pasta de contexto.")
+
+            registro_plano = await run_in_threadpool(_ler_json_drive, drive_file_id)
+            registro_plano.update({
+                "plano": plano,
+                "tema": dados.tema,
+                "nota": dados.nota,
+                "avaliado_em": avaliado_em,
+            })
+            await run_in_threadpool(_atualizar_arquivo_plano_drive, drive_file_id, registro_plano)
+        else:
+            registro_plano = {
+                "plano": plano,
+                "tema": dados.tema,
+                "nota": dados.nota,
+                "criado_em": avaliado_em,
+                "avaliado_em": avaliado_em,
             }
-        )
-        
-        print("✅ Avaliação salva com sucesso no Firestore.")
+            arquivo_plano = await run_in_threadpool(_criar_arquivo_plano_drive, registro_plano)
+            drive_file_id = arquivo_plano["id"]
+
+        print("✅ Plano e avaliação salvos no Google Drive.")
         return {"status": "sucesso", "mensagem": "Obrigado por sua contribuição!"}
 
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"❌ Erro ao salvar avaliação no Firestore: {e}")
-        raise HTTPException(status_code=500, detail="Erro interno ao salvar a avaliação.")
+        print(f"❌ Erro ao salvar avaliação no Google Drive: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao salvar a avaliação no Google Drive: {e}",
+        ) from e
 
 @app.get("/melhores-estrategias")
 async def get_melhores_estrategias():
     """
-    Recupera as 10 estratégias mais recentes com 4 ou 5 estrelas.
-    Retorna lista vazia se o Firestore não estiver configurado ou inacessível.
+    Recupera do Google Drive os 10 planos mais bem avaliados, com nota mínima 3.
     """
-    if db is None:
-        print("⚠️  Firestore não configurado. Retornando lista vazia.")
-        return []
+    if drive_service is None:
+        raise HTTPException(status_code=503, detail="Google Drive indisponível para consultar os planos.")
 
     try:
-        print("🏆 Buscando as melhores estratégias no Firestore...")
-        avaliacoes_ref = db.collection('avaliacoes')
-        
-        # Query para buscar as 10 melhores (mais recentes com nota >= 4)
-        query = avaliacoes_ref.where('nota', '>=', 4).order_by('nota', direction=firebase_admin.firestore.Query.DESCENDING).order_by('timestamp', direction=firebase_admin.firestore.Query.DESCENDING).limit(10)
-        
-        resultados = await run_in_threadpool(query.stream)
-        estrategias = [doc.to_dict() for doc in resultados]
-        
-        return estrategias
-    except Exception as e:
-        error_str = str(e)
-        # Se o banco não existe (404), retorna lista vazia sem causar erro no frontend
-        if "does not exist" in error_str or "404" in error_str:
-            print(f"⚠️  Banco Firestore não encontrado. Retornando lista vazia. Detalhe: {e}")
-            print("   👉 Crie o banco em: https://console.cloud.google.com/datastore/setup?project=gen-lang-client-0555465572")
-            return []
-        print(f"❌ Erro ao buscar melhores estratégias: {e}")
-        raise HTTPException(status_code=500, detail="Erro ao buscar as melhores estratégias.")
+        print("🏆 Buscando planos avaliados na pasta do Google Drive...")
+        arquivos = await run_in_threadpool(_listar_arquivos_plano_drive)
+        estrategias = []
+        for arquivo in arquivos:
+            try:
+                registro = await run_in_threadpool(_ler_json_drive, arquivo["id"])
+                nota = int(registro.get("nota") or 0)
+                if nota >= 3 and isinstance(registro.get("plano"), dict):
+                    estrategias.append({
+                        "plano": registro["plano"],
+                        "nota": nota,
+                        "tema": registro.get("tema", "Plano de aula"),
+                        "timestamp": registro.get("avaliado_em") or registro.get("criado_em"),
+                    })
+            except Exception as e:
+                print(f"⚠️ Não foi possível ler o plano '{arquivo.get('name')}': {e}")
 
+        estrategias.sort(
+            key=lambda item: (item["nota"], item.get("timestamp") or ""),
+            reverse=True,
+        )
+        return estrategias[:10]
+    except Exception as e:
+        print(f"❌ Erro ao buscar planos no Google Drive: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro ao buscar planos no Google Drive: {e}") from e
+
+import threading
+import time
+import webbrowser
+
+# Defina a porta do seu servidor FastAPI
+PORTA = 8000
+# Altere para a URL correta se seu gerador rodar em outra porta (ex: 8501 se for Streamlit)
+URL_GERADOR = f"http://127.0.0.1:{PORTA}/docs"
+
+
+def abrir_navegador():
+    # Aguarda 1.5 segundo para garantir que o Uvicorn subiu completamente
+    time.sleep(1.5)
+    print(f"🚀 Abrindo a interface no navegador: {URL_GERADOR}")
+    webbrowser.open(URL_GERADOR)
+
+
+if __name__ == "__main__":
+    # Inicia a thread responsável por disparar o navegador
+    threading.Thread(target=abrir_navegador, daemon=True).start()
+
+    # Executa o servidor FastAPI com Uvicorn
+    uvicorn.run("main:app", host="127.0.0.1", port=PORTA, reload=True)

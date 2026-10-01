@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BookOpen, Sparkles, CheckSquare, Layers, Wrench, MonitorPlay, Users, FileText, Loader2, Upload, Star, X } from 'lucide-react';
+import { BookOpen, Sparkles, CheckSquare, Layers, Wrench, MonitorPlay, Users, FileText, Loader2, Upload, Star, X, ArrowRight } from 'lucide-react';
 import 'katex/dist/katex.min.css';
 import { MenuTemas } from './MenuTemas';
 import ResultDisplay from './ResultDisplay';
@@ -154,6 +154,7 @@ const phenomenonOptions: Record<string, Record<string, string[]>> = {
 export default function EstrategiasPedagogicas() {
 
   // --- ESTADOS DO FORMULÁRIO ---
+  const [entryView, setEntryView] = useState<'choice' | 'gallery' | 'builder'>('choice');
   const [step, setStep] = useState<'form' | 'loading' | 'result'>('form');
   const [audience, setAudience] = useState("");
   const [classSize, setClassSize] = useState(ClassSizeOptions[1]);
@@ -179,6 +180,8 @@ export default function EstrategiasPedagogicas() {
   const [highlightedStrategies, setHighlightedStrategies] = useState<any[]>([]);
   const [selectedStrategy, setSelectedStrategy] = useState<LessonPlanResponse | null>(null);
   const [isLoadingGallery, setIsLoadingGallery] = useState(true);
+  const [galleryError, setGalleryError] = useState('');
+  const [galleryRefreshKey, setGalleryRefreshKey] = useState(0);
 
   // --- FUNÇÕES DE LÓGICA ---
   const handleReset = () => {
@@ -234,6 +237,7 @@ export default function EstrategiasPedagogicas() {
   useEffect(() => {
     const fetchHighlighted = async () => {
       setIsLoadingGallery(true);
+      setGalleryError('');
       try {
         const BASE_URL = import.meta.env.VITE_API_URL;
         const API_URL = `${BASE_URL}/melhores-estrategias`;
@@ -244,12 +248,13 @@ export default function EstrategiasPedagogicas() {
       } catch (error) {
         console.error("Erro ao carregar galeria:", error);
         setHighlightedStrategies([]); // Limpa em caso de erro
+        setGalleryError(error instanceof Error ? error.message : 'Não foi possível carregar os planos.');
       } finally {
         setIsLoadingGallery(false);
       }
     };
     fetchHighlighted();
-  }, []);
+  }, [galleryRefreshKey]);
 
   const handleGeneratePlan = async () => {
     if (!category || !topic) {
@@ -324,7 +329,15 @@ export default function EstrategiasPedagogicas() {
             <p className="text-indigo-300 text-sm font-medium">Configure a turma e gere sua Estratégia Pedagógica com IA</p>
           </div>
         </div>
-        {(step === 'result' || step === 'loading') && (
+        {entryView !== 'choice' && step === 'form' && (
+          <button
+            onClick={() => setEntryView('choice')}
+            className="text-indigo-200 hover:text-white text-sm font-bold bg-indigo-800 px-4 py-2 rounded-lg transition-colors"
+          >
+            ← Opções
+          </button>
+        )}
+        {entryView === 'builder' && (step === 'result' || step === 'loading') && (
           <button 
             onClick={handleReset}
             className="text-indigo-200 hover:text-white text-sm font-bold bg-indigo-800 px-4 py-2 rounded-lg transition-colors"
@@ -335,8 +348,116 @@ export default function EstrategiasPedagogicas() {
       </div>
 
       <div className="flex-1 overflow-y-auto bg-slate-50 relative">
+
+        {entryView === 'choice' && (
+          <div className="mx-auto max-w-5xl p-8 py-12 animate-in fade-in">
+            <div className="mb-8">
+              <h3 className="text-3xl font-black text-slate-900">Como deseja começar?</h3>
+              <p className="mt-2 text-slate-600">Consulte planos avaliados por outros professores ou crie uma nova proposta para sua turma.</p>
+            </div>
+            <div className="grid gap-6 md:grid-cols-2">
+              <button
+                onClick={() => setEntryView('gallery')}
+                className="flex min-h-64 flex-col items-start rounded-2xl border border-slate-200 bg-white p-7 text-left shadow-sm transition hover:border-amber-300 hover:shadow-lg"
+              >
+                <span className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+                  <Star className="h-6 w-6 fill-current" />
+                </span>
+                <span className="text-xl font-black text-slate-900">Ver planos da comunidade</span>
+                <span className="mt-2 flex-1 text-sm leading-relaxed text-slate-600">Explore planos de aula avaliados com 3 estrelas ou mais e consulte seus detalhes.</span>
+                <span className="mt-5 flex items-center gap-2 text-sm font-bold text-amber-700">
+                  {isLoadingGallery ? 'Carregando planos...' : `${highlightedStrategies.length} planos disponíveis`}
+                  <ArrowRight className="h-4 w-4" />
+                </span>
+              </button>
+              <button
+                onClick={() => { setStep('form'); setEntryView('builder'); }}
+                className="flex min-h-64 flex-col items-start rounded-2xl border border-slate-200 bg-white p-7 text-left shadow-sm transition hover:border-indigo-300 hover:shadow-lg"
+              >
+                <span className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+                  <Sparkles className="h-6 w-6" />
+                </span>
+                <span className="text-xl font-black text-slate-900">Criar meu plano de aula</span>
+                <span className="mt-2 flex-1 text-sm leading-relaxed text-slate-600">Informe tema, turma e recursos para gerar uma estratégia pedagógica adequada ao seu contexto.</span>
+                <span className="mt-5 flex items-center gap-2 text-sm font-bold text-indigo-700">Começar a criar <ArrowRight className="h-4 w-4" /></span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {entryView === 'gallery' && (
+          <div className="mx-auto max-w-6xl p-8 animate-in fade-in">
+            <div className="mb-8">
+              <h3 className="text-2xl font-black text-slate-900">Planos avaliados pela comunidade</h3>
+              <p className="mt-2 text-slate-600">Planos com avaliação média igual ou superior a 3 estrelas.</p>
+            </div>
+            {isLoadingGallery ? (
+              <div className="py-16 text-center text-slate-500">Carregando planos...</div>
+            ) : galleryError ? (
+              <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-6 py-8 text-center text-rose-800">
+                Não foi possível carregar os planos avaliados: {galleryError}
+              </div>
+            ) : highlightedStrategies.length === 0 ? (
+              <div className="rounded-xl border border-slate-200 bg-white px-6 py-12 text-center">
+                <Star className="mx-auto mb-3 h-8 w-8 text-amber-400" />
+                <p className="font-bold text-slate-800">Ainda não há planos avaliados com 3 estrelas ou mais.</p>
+                <p className="mt-1 text-sm text-slate-500">Você pode voltar e criar o primeiro plano para sua turma.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {highlightedStrategies.map((item, index) => (
+                  <article key={item.id || index} className="flex flex-col rounded-xl border border-slate-200 bg-white p-6 shadow-sm transition hover:border-indigo-300 hover:shadow-lg">
+                    <div className="mb-3 flex items-start justify-between gap-3">
+                      <span className="rounded-lg bg-indigo-50 px-3 py-1 text-xs font-black uppercase text-indigo-700">{item.plano?.methodology || 'Estratégia pedagógica'}</span>
+                      <span className="flex shrink-0 items-center gap-1 font-bold text-amber-600">
+                        {Number(item.nota || 0).toFixed(1)} <Star className="h-4 w-4 fill-current" />
+                      </span>
+                    </div>
+                    <h4 className="mb-3 flex-1 text-lg font-bold leading-tight text-slate-900">{item.tema || item.plano?.title || 'Plano de aula'}</h4>
+                    <button
+                      onClick={() => setSelectedStrategy(item.plano)}
+                      className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-slate-100 px-4 py-3 text-sm font-bold text-slate-700 transition hover:bg-indigo-600 hover:text-white"
+                    >
+                      Ver plano <ArrowRight className="h-4 w-4" />
+                    </button>
+                  </article>
+                ))}
+              </div>
+            )}
+
+            {selectedStrategy && (
+              <div className="fixed inset-0 z-50 flex animate-in items-center justify-center bg-black/60 p-4 fade-in">
+                <div className="relative flex h-[90vh] w-full max-w-6xl flex-col rounded-2xl bg-slate-50 shadow-2xl">
+                  <button
+                    onClick={() => setSelectedStrategy(null)}
+                    aria-label="Fechar plano"
+                    className="absolute right-4 top-4 z-10 rounded-full bg-white/80 p-2 transition-all hover:bg-white"
+                  >
+                    <X className="h-6 w-6 text-slate-700" />
+                  </button>
+                  <div className="flex-1 overflow-y-auto">
+                    <ResultDisplay
+                      mode={WorkflowMode.STRATEGY}
+                      lessonPlan={selectedStrategy}
+                      exerciseList={null}
+                      generatedImageUrl={null}
+                      generatedAnimationSvg={null}
+                      onReset={() => setSelectedStrategy(null)}
+                      onGenerateImage={async () => {}}
+                      onGenerateAnimation={async () => {}}
+                      exerciseImages={{}}
+                      isGeneratingImage={false}
+                      isGeneratingAnimation={false}
+                      onRatingSaved={() => setGalleryRefreshKey((key) => key + 1)}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
         
-        {step === 'form' && (
+        {entryView === 'builder' && step === 'form' && (
           <div className="p-8 max-w-5xl mx-auto space-y-8 animate-in fade-in">
             <div className="grid md:grid-cols-2 gap-8">
               
@@ -535,73 +656,10 @@ export default function EstrategiasPedagogicas() {
               </button>
             </div>
 
-            {/* --- NOVA SEÇÃO: GALERIA DE DESTAQUES --- */}
-            {(isLoadingGallery || highlightedStrategies.length > 0) && (
-              <div className="pt-12 border-t border-slate-200">
-                <h3 className="text-2xl font-black text-slate-800 mb-8 flex items-center gap-3">
-                  <Star className="w-7 h-7 text-amber-400 fill-amber-400" />
-                  Estratégias que outros professores estão usando
-                </h3>
-                {isLoadingGallery ? (
-                  <div className="text-center text-slate-500">Carregando destaques...</div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {highlightedStrategies.map((item, index) => (
-                      <div key={index} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-lg hover:border-indigo-300 transition-all flex flex-col">
-                        <div className="flex items-center justify-between mb-3">
-                          <span className="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-lg text-xs font-black uppercase">{item.plano.methodology}</span>
-                          <div className="flex items-center gap-1 text-amber-500">
-                            <span className="font-bold text-sm">{item.nota.toFixed(1)}</span>
-                            <Star className="w-4 h-4 fill-current" />
-                          </div>
-                        </div>
-                        <h4 className="font-bold text-slate-800 text-lg leading-tight flex-grow mb-4">{item.tema}</h4>
-                        <button 
-                          onClick={() => setSelectedStrategy(item.plano)}
-                          className="mt-auto w-full text-center bg-slate-100 hover:bg-indigo-600 hover:text-white text-slate-600 font-bold py-2 px-4 rounded-lg transition-colors"
-                        >
-                          Ver Detalhes
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* --- MODAL PARA EXIBIR DETALHES DA ESTRATÉGIA --- */}
-            {selectedStrategy && (
-              <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-in fade-in">
-                <div className="relative bg-slate-50 rounded-2xl w-full max-w-6xl h-[90vh] flex flex-col shadow-2xl">
-                  <button 
-                    onClick={() => setSelectedStrategy(null)}
-                    className="absolute top-4 right-4 bg-white/80 hover:bg-white rounded-full p-2 z-10 transition-all"
-                  >
-                    <X className="w-6 h-6 text-slate-700" />
-                  </button>
-                  <div className="flex-1 overflow-y-auto">
-                    <ResultDisplay
-                      mode={WorkflowMode.STRATEGY}
-                      lessonPlan={selectedStrategy}
-                      exerciseList={null}
-                      generatedImageUrl={null}
-                      generatedAnimationSvg={null}
-                      onReset={() => setSelectedStrategy(null)}
-                      onGenerateImage={async () => {}}
-                      onGenerateAnimation={async () => {}}
-                      exerciseImages={{}}
-                      isGeneratingImage={false}
-                      isGeneratingAnimation={false}
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-            
           </div>
         )}
 
-        {step === 'loading' && (
+        {entryView === 'builder' && step === 'loading' && (
           <div className="h-full flex flex-col items-center justify-center text-center p-8">
             <Loader2 className="w-16 h-16 text-indigo-500 animate-spin mb-6" />
             <h3 className="text-2xl font-black text-slate-800 mb-2">Analisando Arquivos e Parâmetros...</h3>
@@ -610,7 +668,7 @@ export default function EstrategiasPedagogicas() {
         )}
 
         {/* TELA DE RESULTADOS USANDO O COMPONENTE PODEROSO */}
-        {step === 'result' && lessonPlan && (
+        {entryView === 'builder' && step === 'result' && lessonPlan && (
           <div className="w-full animate-in slide-in-from-bottom-4 duration-500 pb-20">
             <ResultDisplay 
               mode={WorkflowMode.STRATEGY} 
@@ -624,6 +682,7 @@ export default function EstrategiasPedagogicas() {
               exerciseImages={{}}
               isGeneratingImage={false}
               isGeneratingAnimation={false}
+              onRatingSaved={() => setGalleryRefreshKey((key) => key + 1)}
             />
           </div>
         )}

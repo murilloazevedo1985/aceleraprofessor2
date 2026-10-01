@@ -26,7 +26,7 @@ dist-ssr
 # Arquivos de segredos e configurações locais
 .env.local
 .env
-credentials.json
+credenciais.json
 # Pastas pesadas do React e Python
 node_modules/
 venv/

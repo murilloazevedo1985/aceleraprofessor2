@@ -87,6 +87,7 @@ export interface ResultDisplayProps {
   exerciseImages: Record<string, string>;
   isGeneratingImage: boolean;
   isGeneratingAnimation: boolean;
+  onRatingSaved?: () => void;
 }
 
 const CodeBlock: React.FC<{ code: string; label?: string }> = ({ code, label }) => {
@@ -203,12 +204,14 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({
   onGenerateAnimation,
   exerciseImages,
   isGeneratingImage,
-  isGeneratingAnimation
+  isGeneratingAnimation,
+  onRatingSaved,
 }) => {
   console.log("=== MODO ATUAL ===", mode);
   const [rating, setRating] = useState(0);
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
   const [ratingSubmitted, setRatingSubmitted] = useState(false);
+  const [ratingError, setRatingError] = useState('');
   console.log("=== DADOS DO PLANO (CRU) ===", JSON.stringify(lessonPlan, null, 2));
   console.log("=== DADOS DOS EXERCÍCIOS (CRU) ===", JSON.stringify(exerciseList, null, 2));
   
@@ -229,6 +232,7 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({
 
     setRating(rate);
     setIsSubmittingRating(true);
+    setRatingError('');
 
     try {
       const BASE_URL = import.meta.env.VITE_API_URL;
@@ -244,10 +248,16 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({
         }),
       });
 
-      if (!response.ok) throw new Error('Falha ao enviar avaliação');
+      const result = await response.json();
+      if (!response.ok || result.status !== 'sucesso') {
+        throw new Error(result.detail || result.mensagem || 'Falha ao salvar avaliação.');
+      }
       setRatingSubmitted(true);
+      onRatingSaved?.();
     } catch (error) {
       console.error("Erro ao avaliar:", error);
+      setRating(0);
+      setRatingError(error instanceof Error ? error.message : 'Não foi possível salvar sua avaliação.');
     } finally {
       setIsSubmittingRating(false);
     }
@@ -286,11 +296,20 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({
             <div>
                <h1 className="text-4xl font-black text-slate-900 tracking-tight">{plan.title}</h1>
                <div className="flex gap-2 mt-3">
-                 <span className="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-lg text-xs font-black uppercase">{plan.methodology}</span>
                  <span className="px-3 py-1 bg-slate-100 text-slate-600 rounded-lg text-xs font-black uppercase tracking-wider">Fisica Computacional Java</span>
                </div>
             </div>
           </div>
+
+          <section className="mt-6 rounded-xl border-l-8 border-indigo-600 bg-indigo-50 p-6">
+            <span className="text-xs font-black uppercase tracking-wider text-indigo-700">Estratégia pedagógica central</span>
+            <h2 className="mt-2 text-2xl font-black text-slate-900">{plan.methodology}</h2>
+            {plan.methodologyDetails && (
+              <div className="mt-3 whitespace-pre-wrap text-base leading-relaxed text-slate-700">
+                <LatexText text={plan.methodologyDetails} />
+              </div>
+            )}
+          </section>
           
           <div className="grid md:grid-cols-2 gap-8 mt-10">
             <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
@@ -377,17 +396,24 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({
           {(plan.steps || []).map((step, index) => (
             <div key={index} className="space-y-4 print:break-inside-avoid">
               <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100 group-hover:border-indigo-200 transition-colors">
-                <div className="mb-4">
-                  <div className="bg-indigo-50 p-4 rounded-xl border-2 border-indigo-200 shadow-md">
-                    <span className="block text-xs font-black text-indigo-700 mb-1 uppercase">Estratégia Pedagógica</span>
-                    <p className="text-slate-800 text-base font-semibold leading-relaxed">
-                      <LatexText text={step.teacherRole} />
-                    </p>
-                  </div>
+                <div className="mb-4 border-l-4 border-indigo-500 pl-4">
+                  <span className="block text-xs font-black uppercase text-indigo-700">Abordagem desta etapa</span>
+                  <p className="mt-1 text-lg font-bold text-slate-900">{step.approach}</p>
                 </div>
-                <h3 className="text-xl font-black text-slate-800 mb-3 pt-4 border-t border-slate-200">{step.title}</h3>
+                <h3 className="text-xl font-black text-slate-800 mb-1">{step.title}</h3>
+                <p className="mb-3 text-sm font-semibold text-slate-500">{step.time}</p>
                 <div className="whitespace-pre-wrap text-slate-600 text-base mb-4 leading-relaxed">
                   <LatexText text={step.description} />
+                </div>
+                <div className="grid gap-4 border-t border-slate-200 pt-4 md:grid-cols-2">
+                  <div>
+                    <span className="block text-xs font-black uppercase text-slate-500">Ação do professor</span>
+                    <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-slate-700"><LatexText text={step.teacherRole} /></p>
+                  </div>
+                  <div>
+                    <span className="block text-xs font-black uppercase text-slate-500">Ação dos alunos</span>
+                    <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-slate-700"><LatexText text={step.studentRole} /></p>
+                  </div>
                 </div>
                 {step.javaSnippet && (
                   <CodeBlock code={step.javaSnippet} label={`Fragmento Java: ${step.title}`} />
@@ -486,6 +512,7 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({
               ))}
             </div>
           )}
+          {ratingError && <p role="alert" className="mt-4 text-sm font-semibold text-rose-700">{ratingError}</p>}
         </div>
       </div>
     </div>
