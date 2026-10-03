@@ -2,14 +2,13 @@ from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
+import asyncio
 from datetime import datetime, timezone
 from uuid import uuid4
-import io
 import json
 from google import genai
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseUpload
+import firebase_admin
+from firebase_admin import credentials as firebase_credentials, firestore
 import re
 import os
 from dotenv import load_dotenv
@@ -29,28 +28,23 @@ from pinecone import Pinecone
 # --- CONFIGURAÇÕES E VARIÁVEIS DE AMBIENTE ---
 # Carrega as variáveis do arquivo .env ou .env.local
 project_root = os.path.dirname(__file__)
-env_path = os.path.join(project_root, ".env.local")
-
-if os.path.exists(env_path):
-    load_dotenv(dotenv_path=env_path)
-else:
-    load_dotenv(dotenv_path=os.path.join(project_root, ".env"))
+load_dotenv(dotenv_path=os.path.join(project_root, ".env.local"))
+load_dotenv(dotenv_path=os.path.join(project_root, ".env"))
 
 # Resgate e validação das chaves
 CHAVE_API_PINECONE = os.getenv("PINECONE_API_KEY")
 CHAVE_API_GEMINI = os.getenv("GEMINI_API_KEY")
+MODELO_GERACAO_GEMINI = os.getenv("GEMINI_GENERATION_MODEL", "gemini-3.5-flash-lite")
+PULAR_SALVAMENTO_PLANOS = any(
+    os.getenv(variable, "").strip().lower() in {"1", "true", "yes"}
+    for variable in ("SKIP_PLAN_SAVE", "SKIP_PLAN_DRIVE_SAVE")
+)
 CAMINHO_JSON_CREDENCIAIS = os.getenv(
     "GOOGLE_APPLICATION_CREDENTIALS",
     os.path.join(project_root, "credenciais.json"),
 )
 NOME_INDEX_PINECONE = "aulas-fisica"
-ID_PASTA_CONTEXTO_DRIVE = os.getenv(
-    "GOOGLE_DRIVE_CONTEXT_FOLDER_ID",
-    "1jZztziuVQ8e7jJqeBAUXiNP2XQT6fcCJ",
-)
-ID_PASTA_PLANOS_DRIVE = os.getenv("GOOGLE_DRIVE_PLANS_FOLDER_ID")
-NOME_PASTA_PLANOS_DRIVE = "Planos gerados"
-PREFIXO_ARQUIVO_PLANO = "aceleraprofessor_plano_"
+NOME_COLECAO_PLANOS = os.getenv("FIRESTORE_PLANS_COLLECTION", "planos_aula")
 
 if not CHAVE_API_PINECONE:
     raise ValueError("A variável de ambiente PINECONE_API_KEY não foi definida.")
@@ -73,28 +67,33 @@ print("🔌 Conectando ao Pinecone...")
 pc = Pinecone(api_key=CHAVE_API_PINECONE)
 index = pc.Index(NOME_INDEX_PINECONE)
 
-# --- CONEXÃO COM A PASTA DE CONTEXTO NO GOOGLE DRIVE ---
-drive_service = None
-print("📁 Conectando ao Google Drive...")
+# --- CONEXÃO COM O FIRESTORE ---
+firestore_db = None
+firestore_database_checked = False
+print("🗃️ Conectando ao Firestore...")
 try:
-    drive_credentials_json = (
-        os.getenv("GOOGLE_DRIVE_CREDENTIALS_JSON")
-        or os.getenv("FIREBASE_CREDENTIALS_JSON")
-    )
-    if drive_credentials_json:
-        drive_credentials = service_account.Credentials.from_service_account_info(
-            json.loads(drive_credentials_json),
-            scopes=["https://www.googleapis.com/auth/drive"],
-        )
-    else:
-        drive_credentials = service_account.Credentials.from_service_account_file(
-            CAMINHO_JSON_CREDENCIAIS,
-            scopes=["https://www.googleapis.com/auth/drive"],
-        )
-    drive_service = build("drive", "v3", credentials=drive_credentials, cache_discovery=False)
-    print(f"✅ Google Drive pronto. Pasta de planos/contexto: {ID_PASTA_CONTEXTO_DRIVE}")
+    firebase_app = firebase_admin.get_app()
 except Exception as e:
-    print(f"⚠️  Google Drive indisponível: {e}")
+    try:
+        firebase_credentials_json = (
+            os.getenv("FIREBASE_CREDENTIALS_JSON")
+            or os.getenv("GOOGLE_DRIVE_CREDENTIALS_JSON")
+        )
+        if firebase_credentials_json:
+            app_credentials = firebase_credentials.Certificate(json.loads(firebase_credentials_json))
+        else:
+            app_credentials = firebase_credentials.Certificate(CAMINHO_JSON_CREDENCIAIS)
+        firebase_app = firebase_admin.initialize_app(app_credentials)
+    except Exception as init_error:
+        firebase_app = None
+        print(f"⚠️ Firestore indisponível: {init_error}")
+
+if firebase_app is not None:
+    try:
+        firestore_db = firestore.client(app=firebase_app)
+        print(f"✅ Cliente Firestore pronto. Coleção: {NOME_COLECAO_PLANOS}")
+    except Exception as e:
+        print(f"⚠️ Firestore indisponível: {e}")
 
 app = FastAPI()
 app.add_middleware(
@@ -106,114 +105,109 @@ app.add_middleware(
 )
 
 
-def _media_json_drive(documento: dict) -> MediaIoBaseUpload:
-    conteudo = json.dumps(documento, ensure_ascii=False).encode("utf-8")
-    return MediaIoBaseUpload(io.BytesIO(conteudo), mimetype="application/json", resumable=False)
-
-
-def _obter_id_pasta_planos_drive() -> str:
-    if drive_service is None:
-        raise RuntimeError("Google Drive indisponível.")
-
-    if ID_PASTA_PLANOS_DRIVE:
-        pasta = drive_service.files().get(
-            fileId=ID_PASTA_PLANOS_DRIVE,
-            fields="id,name,mimeType,parents",
-            supportsAllDrives=True,
-        ).execute()
-    else:
-        query = (
-            f"'{ID_PASTA_CONTEXTO_DRIVE}' in parents and "
-            f"name = '{NOME_PASTA_PLANOS_DRIVE}' and "
-            "mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+def _verificar_firestore() -> None:
+    global firestore_database_checked
+    if firestore_db is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Firestore não inicializado. Confira as credenciais Firebase do backend.",
         )
-        pastas = drive_service.files().list(
-            q=query,
-            fields="files(id,name,mimeType,parents)",
-            pageSize=10,
-            includeItemsFromAllDrives=True,
-            supportsAllDrives=True,
-        ).execute().get("files", [])
-        if len(pastas) != 1:
-            raise RuntimeError(
-                f"Crie uma única subpasta '{NOME_PASTA_PLANOS_DRIVE}' dentro da pasta de contexto "
-                "e compartilhe-a com a conta de serviço como Editor."
+    if firestore_database_checked:
+        return
+
+    try:
+        list(firestore_db.collection(NOME_COLECAO_PLANOS).limit(1).stream())
+        firestore_database_checked = True
+    except Exception as e:
+        if "database (default) does not exist" in str(e).lower():
+            raise HTTPException(
+                status_code=503,
+                detail="Crie o banco Firestore padrão no Console Firebase antes de gerar e salvar planos.",
+            ) from e
+        raise
+
+
+def _criar_plano_firestore(documento: dict) -> dict:
+    _verificar_firestore()
+    plano_id = uuid4().hex
+    firestore_db.collection(NOME_COLECAO_PLANOS).document(plano_id).set(documento)
+    return {"id": plano_id}
+
+
+def _obter_plano_firestore(plano_id: str) -> dict:
+    _verificar_firestore()
+    snapshot = firestore_db.collection(NOME_COLECAO_PLANOS).document(plano_id).get()
+    if not snapshot.exists:
+        raise HTTPException(status_code=404, detail="Plano não encontrado no Firestore.")
+    return snapshot.to_dict() or {}
+
+
+def _atualizar_plano_firestore(plano_id: str, documento: dict) -> None:
+    _verificar_firestore()
+    firestore_db.collection(NOME_COLECAO_PLANOS).document(plano_id).set(documento)
+
+
+def _listar_planos_firestore() -> list[dict]:
+    _verificar_firestore()
+    return [
+        {"id": snapshot.id, "registro": snapshot.to_dict() or {}}
+        for snapshot in firestore_db.collection(NOME_COLECAO_PLANOS).stream()
+    ]
+
+
+async def _gerar_conteudo_gemini_com_retry(**kwargs):
+    max_tentativas = 5
+    for tentativa in range(max_tentativas):
+        try:
+            return await run_in_threadpool(client.models.generate_content, **kwargs)
+        except Exception as e:
+            codigo = getattr(e, "code", None) or getattr(e, "status_code", None)
+            mensagem = str(e).upper()
+            cota_diaria_esgotada = codigo == 429 and any(
+                marcador in mensagem
+                for marcador in (
+                    "EXCEEDED YOUR CURRENT QUOTA",
+                    "GENERATEREQUESTSPERDAY",
+                    "GENERATE_CONTENT_FREE_TIER_REQUESTS",
+                )
             )
-        pasta = pastas[0]
+            if cota_diaria_esgotada:
+                print(f"⚠️ Cota diária do Gemini esgotada: {e}")
+                raise HTTPException(
+                    status_code=429,
+                    detail=(
+                        "A cota diária do Gemini foi atingida para o modelo configurado. "
+                        "Aguarde a renovação da cota ou confira os limites e o faturamento do projeto."
+                    ),
+                ) from e
 
-    if (
-        pasta.get("name") != NOME_PASTA_PLANOS_DRIVE
-        or pasta.get("mimeType") != "application/vnd.google-apps.folder"
-        or ID_PASTA_CONTEXTO_DRIVE not in pasta.get("parents", [])
-    ):
-        raise RuntimeError(
-            f"A pasta configurada precisa ser '{NOME_PASTA_PLANOS_DRIVE}' e filha direta da pasta de contexto."
-        )
-    return pasta["id"]
+            transitorio = codigo in {429, 500, 502, 503, 504} or any(
+                marcador in mensagem
+                for marcador in (
+                    "429 TOO MANY REQUESTS",
+                    "500 INTERNAL",
+                    "502 BAD GATEWAY",
+                    "503 UNAVAILABLE",
+                    "504 GATEWAY TIMEOUT",
+                    "RESOURCE_EXHAUSTED",
+                    "UNAVAILABLE",
+                )
+            )
+            if not transitorio:
+                raise
 
+            if tentativa == max_tentativas - 1:
+                raise HTTPException(
+                    status_code=503,
+                    detail=f"Gemini continua temporariamente indisponível após {max_tentativas} tentativas: {e}",
+                ) from e
 
-def _criar_arquivo_plano_drive(documento: dict) -> dict:
-    nome_arquivo = f"{PREFIXO_ARQUIVO_PLANO}{uuid4().hex}.json"
-    return drive_service.files().create(
-        body={
-            "name": nome_arquivo,
-            "mimeType": "application/json",
-            "parents": [_obter_id_pasta_planos_drive()],
-        },
-        media_body=_media_json_drive(documento),
-        fields="id,name",
-        supportsAllDrives=True,
-    ).execute()
-
-
-def _metadados_arquivo_drive(file_id: str) -> dict:
-    return drive_service.files().get(
-        fileId=file_id,
-        fields="id,name,mimeType,parents",
-        supportsAllDrives=True,
-    ).execute()
-
-
-def _ler_json_drive(file_id: str) -> dict:
-    conteudo = drive_service.files().get(
-        fileId=file_id,
-        alt="media",
-        supportsAllDrives=True,
-    ).execute()
-    return json.loads(conteudo.decode("utf-8") if isinstance(conteudo, bytes) else conteudo)
-
-
-def _atualizar_arquivo_plano_drive(file_id: str, documento: dict) -> None:
-    drive_service.files().update(
-        fileId=file_id,
-        media_body=_media_json_drive(documento),
-        supportsAllDrives=True,
-        fields="id",
-    ).execute()
-
-
-def _listar_arquivos_plano_drive() -> list[dict]:
-    pasta_planos_id = _obter_id_pasta_planos_drive()
-    query = (
-        f"'{pasta_planos_id}' in parents and "
-        f"name contains '{PREFIXO_ARQUIVO_PLANO}' and trashed = false"
-    )
-    arquivos = []
-    page_token = None
-    while True:
-        resultado = drive_service.files().list(
-            q=query,
-            fields="nextPageToken,files(id,name,createdTime)",
-            pageSize=1000,
-            pageToken=page_token,
-            orderBy="createdTime desc",
-            includeItemsFromAllDrives=True,
-            supportsAllDrives=True,
-        ).execute()
-        arquivos.extend(resultado.get("files", []))
-        page_token = resultado.get("nextPageToken")
-        if not page_token:
-            return arquivos
+            espera = min(2 ** tentativa, 8)
+            print(
+                f"⚠️ Gemini temporariamente indisponível; "
+                f"tentativa {tentativa + 2}/{max_tentativas} em {espera}s: {e}"
+            )
+            await asyncio.sleep(espera)
 
 # --- MODELOS DE ENTRADA ---
 class PerguntaRequest(BaseModel):
@@ -525,11 +519,8 @@ async def gerar_experimento_estrategico(dados: ExperimentoRequest):
 @app.post("/gerar-plano")
 async def gerar_plano(dados: PlanoRequest):
     try:
-        if drive_service is None:
-            raise HTTPException(
-                status_code=503,
-                detail="Google Drive indisponível. O plano não pode ser salvo na pasta de contexto.",
-            )
+        if not PULAR_SALVAMENTO_PLANOS:
+            await run_in_threadpool(_verificar_firestore)
 
         # Combina tema e fenômeno para uma busca mais precisa
         texto_busca = f"{dados.tema} - {dados.fenomeno}" if dados.fenomeno else dados.tema
@@ -853,9 +844,8 @@ async def gerar_plano(dados: PlanoRequest):
         
 
         print("🧠 IA gerando plano final...")
-        resposta = await run_in_threadpool(
-            client.models.generate_content,
-            model="gemini-3.8-flash",
+        resposta = await _gerar_conteudo_gemini_com_retry(
+            model=MODELO_GERACAO_GEMINI,
             contents=prompt,
             config={
                 "response_mime_type": "application/json",
@@ -888,16 +878,20 @@ async def gerar_plano(dados: PlanoRequest):
         if "videoYoutube" not in plano_json:
             plano_json["videoYoutube"] = None
 
-        criado_em = datetime.now(timezone.utc).isoformat()
-        registro_plano = {
-            "plano": plano_json,
-            "tema": dados.tema,
-            "nota": None,
-            "criado_em": criado_em,
-            "avaliado_em": None,
-        }
-        arquivo_plano = await run_in_threadpool(_criar_arquivo_plano_drive, registro_plano)
-        plano_json["driveFileId"] = arquivo_plano["id"]
+        if PULAR_SALVAMENTO_PLANOS:
+            print("ℹ️ Persistência desativada no modo de desenvolvimento.")
+            plano_json["planId"] = None
+        else:
+            criado_em = datetime.now(timezone.utc).isoformat()
+            registro_plano = {
+                "plano": plano_json,
+                "tema": dados.tema,
+                "nota": None,
+                "criado_em": criado_em,
+                "avaliado_em": None,
+            }
+            plano_firestore = await run_in_threadpool(_criar_plano_firestore, registro_plano)
+            plano_json["planId"] = plano_firestore["id"]
 
         print("✅ Tudo pronto! Enviando para o professor.")
         return plano_json
@@ -969,38 +963,33 @@ async def buscar_e_anexar_link_simulacao(plano_json: dict):
 @app.post("/avaliar-estrategia")
 async def avaliar_estrategia(dados: AvaliacaoRequest):
     """
-    Atualiza no Google Drive a avaliação do plano correspondente.
+    Atualiza no Firestore a avaliação do plano correspondente.
     """
-    if drive_service is None:
-        raise HTTPException(
-            status_code=503,
-            detail="Google Drive indisponível. A avaliação não foi salva.",
-        )
+    if PULAR_SALVAMENTO_PLANOS:
+        print("ℹ️ Avaliação recebida em modo de desenvolvimento; não será salva no Firestore.")
+        return {
+            "status": "sucesso",
+            "persistida": False,
+            "mensagem": "Avaliação recebida para teste; não foi salva no Firestore.",
+        }
 
     try:
+        await run_in_threadpool(_verificar_firestore)
         print(f"✍️ Recebendo avaliação de {dados.nota} estrelas para o tema '{dados.tema}'...")
 
-        drive_file_id = dados.plano.get("driveFileId")
-        plano = {key: value for key, value in dados.plano.items() if key != "driveFileId"}
+        plano_id = dados.plano.get("planId")
+        plano = {key: value for key, value in dados.plano.items() if key != "planId"}
         avaliado_em = datetime.now(timezone.utc).isoformat()
 
-        if drive_file_id:
-            pasta_planos_id = await run_in_threadpool(_obter_id_pasta_planos_drive)
-            metadados = await run_in_threadpool(_metadados_arquivo_drive, drive_file_id)
-            if (
-                pasta_planos_id not in metadados.get("parents", [])
-                or not metadados.get("name", "").startswith(PREFIXO_ARQUIVO_PLANO)
-            ):
-                raise HTTPException(status_code=400, detail="O arquivo do plano não pertence à pasta de contexto.")
-
-            registro_plano = await run_in_threadpool(_ler_json_drive, drive_file_id)
+        if plano_id:
+            registro_plano = await run_in_threadpool(_obter_plano_firestore, plano_id)
             registro_plano.update({
                 "plano": plano,
                 "tema": dados.tema,
                 "nota": dados.nota,
                 "avaliado_em": avaliado_em,
             })
-            await run_in_threadpool(_atualizar_arquivo_plano_drive, drive_file_id, registro_plano)
+            await run_in_threadpool(_atualizar_plano_firestore, plano_id, registro_plano)
         else:
             registro_plano = {
                 "plano": plano,
@@ -1009,36 +998,33 @@ async def avaliar_estrategia(dados: AvaliacaoRequest):
                 "criado_em": avaliado_em,
                 "avaliado_em": avaliado_em,
             }
-            arquivo_plano = await run_in_threadpool(_criar_arquivo_plano_drive, registro_plano)
-            drive_file_id = arquivo_plano["id"]
+            await run_in_threadpool(_criar_plano_firestore, registro_plano)
 
-        print("✅ Plano e avaliação salvos no Google Drive.")
-        return {"status": "sucesso", "mensagem": "Obrigado por sua contribuição!"}
+        print("✅ Plano e avaliação salvos no Firestore.")
+        return {"status": "sucesso", "persistida": True, "mensagem": "Obrigado por sua contribuição!"}
 
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Erro ao salvar avaliação no Google Drive: {e}")
+        print(f"❌ Erro ao salvar avaliação no Firestore: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"Erro ao salvar a avaliação no Google Drive: {e}",
+            detail=f"Erro ao salvar a avaliação no Firestore: {e}",
         ) from e
 
 @app.get("/melhores-estrategias")
 async def get_melhores_estrategias():
     """
-    Recupera do Google Drive os 10 planos mais bem avaliados, com nota mínima 3.
+    Recupera do Firestore os 10 planos mais bem avaliados, com nota mínima 3.
     """
-    if drive_service is None:
-        raise HTTPException(status_code=503, detail="Google Drive indisponível para consultar os planos.")
-
     try:
-        print("🏆 Buscando planos avaliados na pasta do Google Drive...")
-        arquivos = await run_in_threadpool(_listar_arquivos_plano_drive)
+        await run_in_threadpool(_verificar_firestore)
+        print("🏆 Buscando planos avaliados no Firestore...")
+        registros = await run_in_threadpool(_listar_planos_firestore)
         estrategias = []
-        for arquivo in arquivos:
+        for item in registros:
             try:
-                registro = await run_in_threadpool(_ler_json_drive, arquivo["id"])
+                registro = item["registro"]
                 nota = int(registro.get("nota") or 0)
                 if nota >= 3 and isinstance(registro.get("plano"), dict):
                     estrategias.append({
@@ -1048,16 +1034,18 @@ async def get_melhores_estrategias():
                         "timestamp": registro.get("avaliado_em") or registro.get("criado_em"),
                     })
             except Exception as e:
-                print(f"⚠️ Não foi possível ler o plano '{arquivo.get('name')}': {e}")
+                print(f"⚠️ Não foi possível ler o plano '{item.get('id')}': {e}")
 
         estrategias.sort(
             key=lambda item: (item["nota"], item.get("timestamp") or ""),
             reverse=True,
         )
         return estrategias[:10]
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"❌ Erro ao buscar planos no Google Drive: {e}")
-        raise HTTPException(status_code=500, detail=f"Erro ao buscar planos no Google Drive: {e}") from e
+        print(f"❌ Erro ao buscar planos no Firestore: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro ao buscar planos no Firestore: {e}") from e
 
 import threading
 import time

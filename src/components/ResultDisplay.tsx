@@ -211,6 +211,7 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({
   const [rating, setRating] = useState(0);
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
   const [ratingSubmitted, setRatingSubmitted] = useState(false);
+  const [ratingPersisted, setRatingPersisted] = useState(true);
   const [ratingError, setRatingError] = useState('');
   console.log("=== DADOS DO PLANO (CRU) ===", JSON.stringify(lessonPlan, null, 2));
   console.log("=== DADOS DOS EXERCÍCIOS (CRU) ===", JSON.stringify(exerciseList, null, 2));
@@ -253,7 +254,8 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({
         throw new Error(result.detail || result.mensagem || 'Falha ao salvar avaliação.');
       }
       setRatingSubmitted(true);
-      onRatingSaved?.();
+      setRatingPersisted(result.persistida !== false);
+      if (result.persistida !== false) onRatingSaved?.();
     } catch (error) {
       console.error("Erro ao avaliar:", error);
       setRating(0);
@@ -487,10 +489,16 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({
       <div className="mt-16 pt-10 border-t-2 border-slate-100">
         <div className="text-center">
           <h3 className="text-2xl font-black text-slate-800 mb-4">
-            {ratingSubmitted ? "✅ Obrigado por contribuir!" : "O que achou desta estratégia?"}
+            {ratingSubmitted
+              ? ratingPersisted ? "✅ Obrigado por contribuir!" : "✅ Avaliação registrada para teste"
+              : "O que achou desta estratégia?"}
           </h3>
           <p className="text-slate-500 mb-8 max-w-md mx-auto">
-            {ratingSubmitted ? "Sua avaliação ajuda a comunidade de professores a encontrar as melhores práticas." : "Sua opinião é fundamental para aprimorar nosso motor de IA e destacar as melhores ideias para outros professores."}
+            {ratingSubmitted
+              ? ratingPersisted
+                ? "Sua avaliação ajuda a comunidade de professores a encontrar as melhores práticas."
+                : "No modo local, a avaliação não foi salva no Google Drive nem compartilhada."
+              : "Sua opinião é fundamental para aprimorar nosso motor de IA e destacar as melhores ideias para outros professores."}
           </p>
           {!ratingSubmitted && (
             <div className="flex justify-center items-center gap-3">

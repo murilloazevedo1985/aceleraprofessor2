@@ -56,12 +56,30 @@ const LabAccessOptions = [
 ];
 
 const MateriaisBasicosOptions = [
-  "Garrafa PET, copos e canudos", 
-  "Barbante ou linha", 
-  "Papelão, papel e fita adesiva", 
-  "Pilhas comuns (AA/AAA)", 
-  "Cronômetro (manual ou celular)", 
-  "Trena ou fita métrica de até 5 m"
+  {
+    label: "Bolas: bolinhas de gude e bola de futebol",
+    materials: ["Bolinhas de gude", "Bola de futebol"],
+  },
+  {
+    label: "Circuito elétrico: pilhas ou baterias, fios de condução e lâmpada",
+    materials: ["Pilhas ou baterias", "Fios de condução", "Lâmpada"],
+  },
+  {
+    label: "Medição: cronômetro e trena ou fita métrica",
+    materials: ["Cronômetro (manual ou celular)", "Trena ou fita métrica"],
+  },
+  {
+    label: "Registro: canetas e clipes",
+    materials: ["Canetas", "Clipes"],
+  },
+  {
+    label: "Montagem: barbante ou linha, papelão, papel, fita adesiva e cola",
+    materials: ["Barbante ou linha", "Papelão", "Papel", "Fita adesiva", "Cola"],
+  },
+  {
+    label: "Recipientes: garrafa PET, copos e canudos",
+    materials: ["Garrafa PET", "Copos", "Canudos"],
+  },
 ];
 
 const MateriaisAvancadosOptions = [
@@ -69,7 +87,7 @@ const MateriaisAvancadosOptions = [
   "Balança (digital ou de precisão)",
   "Termômetro (digital ou de mercúrio/alcoólico)",
   "Cronômetro (manual ou celular)",
-  "Trena ou fita métrica de até 5 m",
+  "Trena ou fita métrica",
   "Tripé universal",
   "Suporte com garras e anéis",
   "Bureta ou proveta graduada",
@@ -105,6 +123,39 @@ const PlaceholderExamples = [
   "Ex: Usar carrinhos de brinquedo para explicar velocidade média e aceleração.",
   "Ex: Analisar o movimento de um elevador para entender as Leis de Newton."
 ];
+
+const configuredDailyLimit = Number(import.meta.env.VITE_GEMINI_DAILY_LIMIT);
+const GEMINI_DAILY_LIMIT = Number.isInteger(configuredDailyLimit) && configuredDailyLimit > 0
+  ? configuredDailyLimit
+  : null;
+const GEMINI_GENERATION_MODEL = import.meta.env.VITE_GEMINI_GENERATION_MODEL || 'gemini-3.5-flash-lite';
+const INTERACTION_STORAGE_KEY = `acelera-professor-gemini-interactions-${GEMINI_GENERATION_MODEL}`;
+
+const getPacificDate = () => {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Los_Angeles',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+  const getPart = (type: string) => parts.find(part => part.type === type)?.value ?? '';
+  return `${getPart('year')}-${getPart('month')}-${getPart('day')}`;
+};
+
+const getTodayInteractionUsage = () => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(INTERACTION_STORAGE_KEY) || 'null');
+    if (saved?.date !== getPacificDate()) {
+      return { count: 0, quotaExhausted: false };
+    }
+    return {
+      count: Number.isInteger(saved.count) ? Math.max(0, saved.count) : 0,
+      quotaExhausted: saved.quotaExhausted === true,
+    };
+  } catch {
+    return { count: 0, quotaExhausted: false };
+  }
+};
 
 // --- MAPEAMENTO TEMA > FENÔMENO ---
 const phenomenonOptions: Record<string, Record<string, string[]>> = {
@@ -156,6 +207,7 @@ export default function EstrategiasPedagogicas() {
   // --- ESTADOS DO FORMULÁRIO ---
   const [entryView, setEntryView] = useState<'choice' | 'gallery' | 'builder'>('choice');
   const [step, setStep] = useState<'form' | 'loading' | 'result'>('form');
+  const [todayUsage, setTodayUsage] = useState(getTodayInteractionUsage);
   const [audience, setAudience] = useState("");
   const [classSize, setClassSize] = useState(ClassSizeOptions[1]);
   
@@ -182,6 +234,16 @@ export default function EstrategiasPedagogicas() {
   const [isLoadingGallery, setIsLoadingGallery] = useState(true);
   const [galleryError, setGalleryError] = useState('');
   const [galleryRefreshKey, setGalleryRefreshKey] = useState(0);
+
+  useEffect(() => {
+    const syncInteractionUsage = () => setTodayUsage(getTodayInteractionUsage());
+    window.addEventListener('storage', syncInteractionUsage);
+    const timer = window.setInterval(syncInteractionUsage, 60_000);
+    return () => {
+      window.removeEventListener('storage', syncInteractionUsage);
+      window.clearInterval(timer);
+    };
+  }, []);
 
   // --- FUNÇÕES DE LÓGICA ---
   const handleReset = () => {
@@ -226,6 +288,16 @@ export default function EstrategiasPedagogicas() {
     }
   };
 
+  const toggleMaterialGroup = (materials: string[]) => {
+    setSelectedMaterials(prev => {
+      const groupIsSelected = materials.every(material => prev.includes(material));
+      const materialsWithoutGroup = prev.filter(material => !materials.includes(material));
+      return groupIsSelected
+        ? materialsWithoutGroup
+        : [...materialsWithoutGroup, ...materials];
+    });
+  };
+
   const handleTemaEscolhido = (nomeDoTema: string) => {
     const partes = nomeDoTema.split(" > ");
     setCategory(partes[0] || nomeDoTema);
@@ -262,6 +334,19 @@ export default function EstrategiasPedagogicas() {
       return;
     }
 
+    const currentUsage = getTodayInteractionUsage();
+    const nextRequestCount = currentUsage.count + 1;
+    const nextUsage = { ...currentUsage, count: nextRequestCount };
+    setTodayUsage(nextUsage);
+    try {
+      localStorage.setItem(INTERACTION_STORAGE_KEY, JSON.stringify({
+        date: getPacificDate(),
+        count: nextRequestCount,
+        quotaExhausted: currentUsage.quotaExhausted,
+      }));
+    } catch (error) {
+      console.warn('Não foi possível salvar a contagem local de interações:', error);
+    }
     setStep('loading');
     
     const dadosParaOBackend = {
@@ -290,7 +375,13 @@ export default function EstrategiasPedagogicas() {
         body: JSON.stringify(dadosParaOBackend)
       });
       
-      if (!resposta.ok) throw new Error("Erro na comunicação com o servidor Python");
+      if (!resposta.ok) {
+        const erroServidor = await resposta.json().catch(() => null);
+        const detalhe = typeof erroServidor?.detail === "string"
+          ? erroServidor.detail
+          : "Erro na comunicação com o servidor Python";
+        throw new Error(`HTTP ${resposta.status}: ${detalhe}`);
+      }
 
       const dadosRetornados = await resposta.json();
       console.log("DADOS BRUTOS DO PYTHON:", dadosRetornados);
@@ -310,7 +401,19 @@ export default function EstrategiasPedagogicas() {
 
     } catch (error) {
       console.error("Erro ao gerar plano:", error);
-      alert("Ocorreu um erro ao gerar o plano de aula. Verifique o console para mais detalhes.");
+      if (error instanceof Error && error.message.includes('HTTP 429:') && error.message.includes('cota diária do Gemini')) {
+        const exhaustedUsage = { ...getTodayInteractionUsage(), quotaExhausted: true };
+        setTodayUsage(exhaustedUsage);
+        try {
+          localStorage.setItem(INTERACTION_STORAGE_KEY, JSON.stringify({
+            date: getPacificDate(),
+            ...exhaustedUsage,
+          }));
+        } catch (storageError) {
+          console.warn('Não foi possível salvar o estado da cota local:', storageError);
+        }
+      }
+      alert(error instanceof Error ? error.message : "Ocorreu um erro ao gerar o plano de aula.");
       setStep('form');
     }
   };
@@ -458,7 +561,7 @@ export default function EstrategiasPedagogicas() {
         )}
         
         {entryView === 'builder' && step === 'form' && (
-          <div className="p-8 max-w-5xl mx-auto space-y-8 animate-in fade-in">
+          <div className="p-8 max-w-6xl mx-auto space-y-8 animate-in fade-in">
             <div className="grid md:grid-cols-2 gap-8">
               
               {/* --- COLUNA DA ESQUERDA --- */}
@@ -522,7 +625,7 @@ export default function EstrategiasPedagogicas() {
               </div>
 
               {/* --- COLUNA DA DIREITA --- */}
-              <div className="space-y-6">
+              <div className="contents">
                 
                 <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
                   <h3 className="flex items-center gap-2 font-bold text-slate-800 mb-4 pb-2 border-b border-slate-100">
@@ -541,7 +644,7 @@ export default function EstrategiasPedagogicas() {
                   </div>
                 </div>
 
-                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm md:col-span-2">
                   <h3 className="flex items-center gap-2 font-bold text-slate-800 mb-4 pb-2 border-b border-slate-100">
                     <Wrench className="w-5 h-5 text-indigo-500" /> Materiais e Laboratório
                   </h3>
@@ -565,15 +668,18 @@ export default function EstrategiasPedagogicas() {
                       <div className="animate-in fade-in slide-in-from-top-2 duration-300">
                         <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Materiais Básicos Disponíveis</label>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-2">
-                          {MateriaisBasicosOptions.map(opt => (
-                            <label key={opt} className="flex items-start gap-2 cursor-pointer group">
-                              <input type="checkbox" className="hidden" checked={selectedMaterials.includes(opt)} onChange={() => toggleMaterial(opt)} />
-                              <div className={`mt-0.5 w-4 h-4 rounded flex items-center justify-center border transition-colors ${selectedMaterials.includes(opt) ? 'bg-indigo-500 border-indigo-500' : 'border-slate-300 group-hover:border-indigo-400'}`}>
-                                {selectedMaterials.includes(opt) && <CheckSquare className="w-3 h-3 text-white" />}
+                          {MateriaisBasicosOptions.map(group => {
+                            const isSelected = group.materials.every(material => selectedMaterials.includes(material));
+                            return (
+                            <label key={group.label} className="flex items-start gap-2 cursor-pointer group">
+                              <input type="checkbox" className="hidden" checked={isSelected} onChange={() => toggleMaterialGroup(group.materials)} />
+                              <div className={`mt-0.5 w-4 h-4 rounded flex items-center justify-center border transition-colors ${isSelected ? 'bg-indigo-500 border-indigo-500' : 'border-slate-300 group-hover:border-indigo-400'}`}>
+                                {isSelected && <CheckSquare className="w-3 h-3 text-white" />}
                               </div>
-                              <span className="text-sm text-slate-600 group-hover:text-slate-900 leading-tight">{opt}</span>
+                              <span className="text-sm text-slate-600 group-hover:text-slate-900 leading-tight">{group.label}</span>
                             </label>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
                     )}
@@ -597,7 +703,7 @@ export default function EstrategiasPedagogicas() {
                   </div>
                 </div>
                 {/* NOVO BLOCO: SELEÇÃO DE TOM PEDAGÓGICO */}
-                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm md:col-span-2">
                   <h3 className="flex items-center gap-2 font-bold text-slate-800 mb-4 pb-2 border-b border-slate-100">
                     <Sparkles className="w-5 h-5 text-indigo-500" /> Abordagem
                   </h3>
@@ -647,7 +753,19 @@ export default function EstrategiasPedagogicas() {
             </div>
 
             {/* --- BOTÃO DE GERAR --- */}
-            <div className="flex justify-end pt-4 pb-12">
+            <div className="flex flex-col items-end gap-3 pt-4 pb-12">
+              <div className="text-right" aria-live="polite">
+                <p className="text-sm font-semibold text-slate-700">
+                  {todayUsage.quotaExhausted
+                    ? 'O Google informou que a cota diária deste modelo foi esgotada.'
+                    : GEMINI_DAILY_LIMIT !== null
+                      ? `Interações estimadas restantes hoje: ${Math.max(0, GEMINI_DAILY_LIMIT - todayUsage.count)} de ${GEMINI_DAILY_LIMIT}`
+                      : `Solicitações iniciadas neste navegador hoje: ${todayUsage.count}`}
+                </p>
+                <p className="mt-1 max-w-md text-xs text-slate-500">
+                  Contagem local; a cota real inclui outros usos do projeto. Configure VITE_GEMINI_DAILY_LIMIT com o limite visto no AI Studio para estimar o saldo.
+                </p>
+              </div>
               <button 
                 onClick={handleGeneratePlan}
                 className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-4 rounded-xl font-black text-lg shadow-lg flex items-center gap-2 transition-transform hover:scale-105"
@@ -670,6 +788,18 @@ export default function EstrategiasPedagogicas() {
         {/* TELA DE RESULTADOS USANDO O COMPONENTE PODEROSO */}
         {entryView === 'builder' && step === 'result' && lessonPlan && (
           <div className="w-full animate-in slide-in-from-bottom-4 duration-500 pb-20">
+            <div className="mx-auto max-w-6xl px-8 pt-5 text-right" aria-live="polite">
+              <p className="text-sm font-semibold text-slate-700">
+                {todayUsage.quotaExhausted
+                  ? 'O Google informou que a cota diária deste modelo foi esgotada.'
+                  : GEMINI_DAILY_LIMIT !== null
+                    ? `Interações estimadas restantes hoje: ${Math.max(0, GEMINI_DAILY_LIMIT - todayUsage.count)} de ${GEMINI_DAILY_LIMIT}`
+                    : `Solicitações iniciadas neste navegador hoje: ${todayUsage.count}`}
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                Contagem local; a cota real inclui outros usos do projeto. Configure VITE_GEMINI_DAILY_LIMIT no AI Studio para estimar o saldo.
+              </p>
+            </div>
             <ResultDisplay 
               mode={WorkflowMode.STRATEGY} 
               lessonPlan={lessonPlan}
