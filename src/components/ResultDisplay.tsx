@@ -39,8 +39,7 @@ const MediaCard = ({ tipo, titulo, url }: MediaCardProps & { url?: string }) => 
     corFundo = 'bg-indigo-50 border-indigo-200';
     corTexto = 'text-indigo-800';
     corBotao = 'bg-indigo-600 hover:bg-indigo-700';
-    // Se uma URL específica foi fornecida, use-a. Senão, crie uma URL de busca no Google.
-    urlFinal = url || `https://www.google.com/search?q=${termoDeBusca}+site:phet.colorado.edu+OR+site:walter-fendt.de+OR+site:vascak.cz`;
+    urlFinal = url?.trim() || '';
   } else {
     rotulo = 'Vídeo Sugerido';
     icone = <Youtube className="w-5 h-5" />;
@@ -62,15 +61,21 @@ const MediaCard = ({ tipo, titulo, url }: MediaCardProps & { url?: string }) => 
         {titulo}
       </p>
       
-      <a 
-        href={urlFinal} 
-        target="_blank" 
-        rel="noopener noreferrer"
-        className={`mt-auto text-center ${corBotao} text-white font-bold py-3 px-4 rounded-xl transition-colors flex items-center justify-center gap-2 shadow-md`}
-      >
-        <Search className="w-4 h-4" />
-        {isSimulacao ? 'Buscar Simulação' : 'Buscar Vídeo'}
-      </a>
+      {isSimulacao && !urlFinal ? (
+        <p role="status" className="mt-auto rounded-xl border border-indigo-200 bg-white/70 px-4 py-3 text-center text-sm font-medium text-indigo-800">
+          Link direto da simulação indisponível para este tema.
+        </p>
+      ) : (
+        <a
+          href={urlFinal}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={`mt-auto text-center ${corBotao} text-white font-bold py-3 px-4 rounded-xl transition-colors flex items-center justify-center gap-2 shadow-md`}
+        >
+          {isSimulacao ? <ExternalLink className="h-4 w-4" /> : <Search className="h-4 w-4" />}
+          {isSimulacao ? 'Abrir simulação direta' : 'Buscar Vídeo'}
+        </a>
+      )}
     </div>
   );
 };

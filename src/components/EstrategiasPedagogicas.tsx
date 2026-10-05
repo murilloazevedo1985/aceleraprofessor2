@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { BookOpen, Sparkles, CheckSquare, Layers, Wrench, MonitorPlay, Users, FileText, Loader2, Upload, Star, X, ArrowRight } from 'lucide-react';
+import { BookOpen, Sparkles, CheckSquare, Layers, Wrench, MonitorPlay, Users, FileText, Upload, Star, X, ArrowRight } from 'lucide-react';
 import 'katex/dist/katex.min.css';
 import { MenuTemas } from './MenuTemas';
 import ResultDisplay from './ResultDisplay';
 import { WorkflowMode, LessonPlanResponse, PhysicsCategories } from '../types';
+import LoadingScreen from '../../LoadingScreen';
 
 export interface LessonStep {
   time: string;
@@ -419,7 +420,7 @@ export default function EstrategiasPedagogicas() {
   };
 
   return (
-    <div className="bg-white rounded-[2rem] shadow-xl border border-slate-200 overflow-hidden flex flex-col h-[85vh]">
+    <div className="flex min-h-[85vh] flex-col rounded-[2rem] border border-slate-200 bg-white shadow-xl">
       
       {/* --- HEADER FIXO --- */}
       <div className="bg-indigo-900 px-8 py-6 flex items-center justify-between shadow-md z-10 shrink-0">
@@ -450,7 +451,7 @@ export default function EstrategiasPedagogicas() {
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto bg-slate-50 relative">
+      <div className="relative flex-1 bg-slate-50">
 
         {entryView === 'choice' && (
           <div className="mx-auto max-w-5xl p-8 py-12 animate-in fade-in">
@@ -778,11 +779,7 @@ export default function EstrategiasPedagogicas() {
         )}
 
         {entryView === 'builder' && step === 'loading' && (
-          <div className="h-full flex flex-col items-center justify-center text-center p-8">
-            <Loader2 className="w-16 h-16 text-indigo-500 animate-spin mb-6" />
-            <h3 className="text-2xl font-black text-slate-800 mb-2">Analisando Arquivos e Parâmetros...</h3>
-            <p className="text-slate-500 text-lg max-w-md">A IA está elaborando uma Estratégia Pedagógica inspirada no seu contexto e baseada no nosso banco de dados.</p>
-          </div>
+          <LoadingScreen />
         )}
 
         {/* TELA DE RESULTADOS USANDO O COMPONENTE PODEROSO */}

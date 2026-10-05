@@ -156,18 +156,18 @@ const CompetenceAssessment: React.FC<CompetenceAssessmentProps> = ({ onComplete,
   };
 
   const MultiLayerRadarChart = ({ data }: { data: CompetenceResult }) => {
-    const size = 300;
+    const size = 400;
     const center = size / 2;
-    const radius = 180; 
+    const radius = 145;
     const axisCount = 5;
     const angleStep = (Math.PI * 2) / axisCount;
 
-    const domainLabels = [
-      "Domínio sobre a Física",
-      "Informática",
-      "Gestão Tecnológica",
-      "Tecnologias no Ensino",
-      "Inovação Profissional"
+    const domains = [
+      { initials: 'DF', label: 'Domínio sobre a Física' },
+      { initials: 'Inf', label: 'Informática' },
+      { initials: 'GT', label: 'Gestão Tecnológica' },
+      { initials: 'TDEF', label: 'Tecnologias Digitais no Ensino de Física' },
+      { initials: 'IP', label: 'Inovação Profissional' },
     ];
 
     const getCoord = (value: number, index: number) => {
@@ -190,26 +190,23 @@ const CompetenceAssessment: React.FC<CompetenceAssessmentProps> = ({ onComplete,
 
     return (
       <div className="flex flex-col items-center">
-        <svg width="100%" height="100%" viewBox={`0 0 ${size} ${size}`} className="overflow-visible mx-auto drop-shadow-md max-w-lg">
+        <svg viewBox={`0 0 ${size} ${size}`} className="mx-auto aspect-square w-full max-w-xl drop-shadow-md">
           {[25, 50, 75, 100].map(level => (
             <g key={level}>
-              <polygon points={domainLabels.map((_, i) => {
+              <polygon points={domains.map((_, i) => {
                 const p = getCoord(level, i); return `${p.x},${p.y}`;
               }).join(' ')} fill="none" stroke="#94a3b8" strokeWidth="1.5" /> 
-              <text x={center} y={center - (level / 100 * radius) - 4} textAnchor="middle" className="text-xs fill-slate-500 font-bold">{level}%</text>
             </g>
           ))}
           
-          {domainLabels.map((l, i) => {
+          {domains.map((domain, i) => {
             const p = getCoord(100, i);
-            const angle = i * angleStep - Math.PI / 2;
-            const x = center + (radius + 50) * Math.cos(angle);
-            const y = center + (radius + 50) * Math.sin(angle);
             return (
               <g key={i}>
                 <line x1={center} y1={center} x2={p.x} y2={p.y} stroke="#cbd5e1" strokeWidth="2" />
-                <text x={x} y={y} textAnchor="middle" alignmentBaseline="middle" className="text-[11px] font-black fill-slate-600 uppercase leading-none">
-                  {l}
+                <circle cx={p.x} cy={p.y} r="21" fill="#334155" />
+                <text x={p.x} y={p.y + 4} textAnchor="middle" className="fill-white text-[10px] font-bold">
+                  {domain.initials}
                 </text>
               </g>
             );
@@ -219,44 +216,50 @@ const CompetenceAssessment: React.FC<CompetenceAssessmentProps> = ({ onComplete,
           {drawPolygon(hValues, "#10b981", "rgba(16, 185, 129, 0.2)")}
           {drawPolygon(aValues, "#f43f5e", "rgba(244, 63, 94, 0.2)")}
           
-          <g transform={`translate(${center - 130}, ${size + 80})`}>
-            <rect width="12" height="12" fill="#3b82f6" rx="2" /> <text x="18" y="10" className="text-xs fill-slate-600 font-bold">C - Conhecimentos</text>
-            <rect x="130" width="12" height="12" fill="#10b981" rx="2" /> <text x="148" y="10" className="text-xs fill-slate-600 font-bold">H - Habilidades</text>
-            <rect x="245" width="12" height="12" fill="#f43f5e" rx="2" /> <text x="263" y="10" className="text-xs fill-slate-600 font-bold">A - Atitudes</text>
-          </g>
         </svg>
+        <div className="mt-4 grid w-full grid-cols-1 gap-2 text-xs sm:grid-cols-2">
+          {domains.map((domain) => (
+            <div key={domain.initials} className="flex min-w-0 items-start gap-2 text-slate-600">
+              <span className="flex h-7 min-w-8 shrink-0 items-center justify-center rounded-full bg-slate-700 px-1 text-[10px] font-bold text-white">{domain.initials}</span>
+              <span className="break-words">{domain.label}</span>
+            </div>
+          ))}
+        </div>
+        <div className="mt-4 flex flex-wrap justify-center gap-x-4 gap-y-2 text-xs font-semibold text-slate-600">
+          <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm bg-blue-500" />C - Conhecimentos</span>
+          <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm bg-emerald-500" />H - Habilidades</span>
+          <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm bg-rose-500" />A - Atitudes</span>
+        </div>
       </div>
     );
   };
 
   const ProportionalVenn = ({ data }: { data: CompetenceResult }) => {
-    const baseR = 60; 
-    const cR = (Math.sqrt(Math.max(data.cha.conhecimentos, 5)) / 10) * baseR;
-    const hR = (Math.sqrt(Math.max(data.cha.habilidades, 5)) / 10) * baseR;
-    const aR = (Math.sqrt(Math.max(data.cha.atitudes, 5)) / 10) * baseR;
-    
-    const centerX = 150, centerY = 130;
-    const offset = 30;
-    
+    const indicators = [
+      { label: 'Conhecimentos', value: data.cha.conhecimentos, color: '#3b82f6', fill: 'rgba(59, 130, 246, 0.42)' },
+      { label: 'Habilidades', value: data.cha.habilidades, color: '#10b981', fill: 'rgba(16, 185, 129, 0.42)' },
+      { label: 'Atitudes', value: data.cha.atitudes, color: '#f43f5e', fill: 'rgba(244, 63, 94, 0.42)' },
+    ];
+    const radius = (value: number) => 40 + Math.pow(Math.max(0, value) / 100, 2) * 52;
+
     return (
-      <div className="flex flex-col items-center">
-        <svg width="300" height="240" viewBox="0 0 300 240" className="drop-shadow-lg">
-          <defs>
-            <filter id="shadow">
-              <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#000" floodOpacity="0.1" />
-            </filter>
-          </defs>
-          
-          <circle cx={centerX} cy={centerY - offset} r={cR} fill="rgba(59, 130, 246, 0.45)" stroke="#3b82f6" strokeWidth="2" filter="url(#shadow)" />
-          <circle cx={centerX + offset} cy={centerY + offset / 2} r={hR} fill="rgba(16, 185, 129, 0.45)" stroke="#10b981" strokeWidth="2" filter="url(#shadow)" />
-          <circle cx={centerX - offset} cy={centerY + offset / 2} r={aR} fill="rgba(244, 63, 94, 0.45)" stroke="#f43f5e" strokeWidth="2" filter="url(#shadow)" />
-          
-          <text x={centerX} y={centerY - offset - cR - 10} textAnchor="middle" className="text-[10px] font-black fill-blue-900 drop-shadow-sm uppercase">Conhecimentos ({Math.round(data.cha.conhecimentos)}%)</text>
-          <text x={centerX + offset + hR + 10} y={centerY + offset / 2} textAnchor="start" className="text-[10px] font-black fill-emerald-900 drop-shadow-sm uppercase">Habilidades ({Math.round(data.cha.habilidades)}%)</text>
-          <text x={centerX - offset - aR - 10} y={centerY + offset / 2} textAnchor="end" className="text-[10px] font-black fill-rose-900 drop-shadow-sm uppercase">Atitudes ({Math.round(data.cha.atitudes)}%)</text>
-          
-          <text x={centerX} y={centerY + 5} textAnchor="middle" className="text-[12px] font-black fill-slate-800 tracking-tighter drop-shadow-md uppercase">Integração CHA</text>
+      <div className="w-full min-w-0">
+        <svg viewBox="0 0 320 280" role="img" aria-label="Diagrama radial do equilíbrio entre conhecimentos, habilidades e atitudes; os círculos se sobrepõem e seu tamanho representa o percentual" className="mx-auto block w-full max-w-md">
+          <circle cx="160" cy="100" r={radius(data.cha.conhecimentos)} fill={indicators[0].fill} stroke={indicators[0].color} strokeWidth="3" />
+          <circle cx="125" cy="165" r={radius(data.cha.atitudes)} fill={indicators[2].fill} stroke={indicators[2].color} strokeWidth="3" />
+          <circle cx="195" cy="165" r={radius(data.cha.habilidades)} fill={indicators[1].fill} stroke={indicators[1].color} strokeWidth="3" />
         </svg>
+        <div className="mt-3 w-full space-y-2">
+          {indicators.map((indicator) => (
+            <div key={indicator.label} className="flex min-w-0 items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-sm">
+              <span className="flex min-w-0 items-center gap-2 font-semibold text-slate-700">
+                <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: indicator.color }} />
+                <span className="break-words">{indicator.label}</span>
+              </span>
+              <span className="shrink-0 font-black text-slate-800">{Math.round(indicator.value)}%</span>
+            </div>
+          ))}
+        </div>
       </div>
     );
   };
@@ -278,44 +281,38 @@ const CompetenceAssessment: React.FC<CompetenceAssessmentProps> = ({ onComplete,
 
     const getTrainingAdvice = () => {
         const sorted = Object.entries(finalData.detail)
-          .sort((a: any, b: any) => (a[1].c + a[1].h + a[1].a) - (b[1].c + b[1].h + b[1].a));
+          .map(([key, value]: [string, any]) => ({
+            key,
+            score: (value.c + value.h + value.a) / 3,
+            area: categories.find(category => category.id === key)?.title || key,
+          }))
+          .sort((a, b) => a.score - b.score);
+
+        const strongestAreas = [...sorted].reverse().slice(0, 2).map(item => item.area);
+        const anchor = strongestAreas.join(' e ');
         
-        const adviceMap: Record<string, { strategy: string, resources: string[] }> = {
-          physics: {
-            strategy: "Foque na transposição didática da Física Moderna. A abstração matemática pode ser vencida com modelos visuais consistentes.",
-            resources: ["Cursos de Física Moderna para o Ensino Médio", "Artigos da Revista Brasileira de Ensino de Física (RBEF)", "Simulações de Relatividade e Quântica"]
-          },
-          informatics: {
-            strategy: "Melhore sua base técnica para resolver problemas inesperados de hardware. Autonomia técnica reduz a ansiedade tecnológica.",
-            resources: ["Fundamentos de Redes para Escolas", "Manutenção básica de Chromebooks/Tablets", "Especialização em Suporte Educacional"]
-          },
-          management: {
-            strategy: "Otimize seu tempo migrando de pastas físicas para um ecossistema digital integrado (AVA).",
-            resources: ["Certificação Google Educator Level 1", "Moodle para Professores: Avançado", "Ética e Proteção de Dados (LGPD) na Educação"]
-          },
-          techPhysics: {
-            strategy: "Passe da visualização passiva para a coleta ativa de dados digitais em experimentos reais.",
-            resources: ["Uso Avançado do Software Tracker", "Arduino aplicado ao laboratório de Física", "Análise de dados com PhysPhox"]
-          },
-          innovation: {
-            strategy: "Integre a IA não apenas para criar tarefas, mas para feedback formativo instantâneo para os alunos.",
-            resources: ["Prompt Engineering para Educadores de STEM", "Aplicações de Big Data na gestão de turmas", "Tendências de 5G na Internet das Coisas (IoT) Educacional"]
-          }
+        const adviceMap: Record<string, string> = {
+          physics: `Parta de ${anchor} para aprofundar o domínio conceitual em Física: escolha um conceito que você já ensina com segurança e conecte-o a um fenômeno novo, representando-o por uma explicação verbal, um esquema e uma situação-problema. Depois, avance para um tópico em que ainda tenha dúvidas e compare sua explicação com uma fonte didática confiável ou uma simulação. Registre quais ideias consegue explicar sem consulta e quais precisam de estudo adicional; use esse registro para planejar uma pequena sequência de revisão e testar se a explicação ficou clara para outra pessoa.`,
+          informatics: `Use sua experiência em ${anchor} como ponto de apoio para desenvolver autonomia digital: escolha uma ferramenta que já faça parte da sua rotina de ensino e pratique uma tarefa técnica por vez, como organizar arquivos, ajustar permissões ou preparar uma apresentação interativa. Em seguida, simule um problema comum de uso e anote os passos para resolvê-lo sem depender de ajuda imediata. Repita o procedimento em outro dispositivo ou plataforma e mantenha um roteiro curto de consulta; essa prática transforma familiaridade em segurança para lidar com imprevistos durante a aula.`,
+          management: `Aproveite ${anchor} para estruturar uma rotina tecnológica simples e sustentável: escolha uma turma ou unidade didática e organize materiais, links e atividades em um único ambiente virtual. Revise as permissões de acesso e evite incluir dados pessoais desnecessários dos alunos. Teste o percurso como se fosse um estudante, do acesso ao envio de uma atividade, e peça a alguém para identificar etapas confusas. Faça uma revisão semanal curta para manter os materiais atualizados e aplicar os mesmos cuidados de organização e privacidade nas próximas turmas.`,
+          techPhysics: `Use ${anchor} como âncora para passar da compreensão ou do uso pontual da tecnologia a uma atividade de Física com dados observáveis. Selecione um fenômeno familiar, defina previamente o que os estudantes vão observar ou medir e escolha uma ferramenta disponível, como uma simulação, o Tracker ou o Phyphox. Primeiro teste a atividade sozinho e registre possíveis dificuldades técnicas; depois, conduza uma versão curta com os alunos, pedindo que comparem os dados com uma previsão. Ao final, avalie tanto a interpretação física quanto a qualidade das medições e ajuste o roteiro para a próxima aplicação.`,
+          innovation: `A partir de ${anchor}, escolha uma necessidade real da sua prática e experimente uma tecnologia nova em escala pequena, sem substituir de imediato uma estratégia que já funciona. Por exemplo, use uma ferramenta de IA para criar perguntas de revisão e confira cada resposta antes de compartilhar com a turma. Compare o material gerado com seus objetivos de aprendizagem, peça aos alunos que identifiquem imprecisões e revise o conteúdo com eles. Registre o que economizou tempo, o que exigiu correção e como a ferramenta contribuiu para a aprendizagem; use essa avaliação para decidir se vale ampliar a experiência.`,
         };
 
-        return sorted.slice(0, 2).map(([key]) => ({
-            area: categories.find(c => c.id === key)?.title,
-            advice: adviceMap[key]
+        return sorted.slice(0, 2).map(({ key, area, score }) => ({
+            area,
+            score,
+            strategy: adviceMap[key],
         }));
     };
 
     return (
-      <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-700 pb-20 px-4 mt-8">
-        <div className="flex justify-between items-center mb-6">
+      <div className="mx-auto mt-4 max-h-[calc(100dvh-5rem)] w-full max-w-6xl space-y-6 overflow-y-auto overscroll-contain px-3 pb-12 [scrollbar-gutter:stable] animate-in fade-in duration-700 sm:mt-8 sm:space-y-8 sm:px-4 sm:pb-20 print:max-h-none print:overflow-visible">
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           {onVoltar ? (
             <button 
               onClick={onVoltar} 
-              className="inline-flex items-center px-4 py-2 bg-white text-slate-600 font-bold rounded-xl shadow-sm border border-slate-200 hover:bg-slate-50 hover:text-indigo-600 transition-colors"
+              className="inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 font-bold text-slate-600 shadow-sm transition-colors hover:bg-slate-50 hover:text-indigo-600 sm:w-auto"
             >
               ← Voltar ao Menu Principal
             </button>
@@ -323,116 +320,96 @@ const CompetenceAssessment: React.FC<CompetenceAssessmentProps> = ({ onComplete,
 
           <button 
             onClick={handleDownloadPdf}
-            className="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white font-black uppercase text-sm rounded-xl shadow-lg shadow-indigo-200 hover:bg-indigo-700 hover:scale-105 transition-all"
+            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-black uppercase text-white shadow-lg shadow-indigo-200 transition-all hover:bg-indigo-700 sm:w-auto sm:px-6"
           >
             <Download className="w-5 h-5" />
             Salvar Relatório em PDF
           </button>
         </div>
 
-        <div ref={relatorioRef} className="bg-white p-8 rounded-3xl print:p-0">
+        <div ref={relatorioRef} className="min-w-0 rounded-2xl bg-white p-4 sm:rounded-3xl sm:p-8 print:p-0">
           <div className="text-center mb-10">
-            <Award className="w-16 h-16 text-indigo-600 mx-auto mb-4" />
-            <h2 className="text-3xl font-black text-slate-900 tracking-tight">Diagnóstico de Competência Digital Docente</h2>
+            <Award className="mx-auto mb-4 h-12 w-12 text-indigo-600 sm:h-16 sm:w-16" />
+            <h2 className="break-words text-xl font-black text-slate-900 sm:text-3xl">Diagnóstico de Competência Digital Docente</h2>
             <p className="text-slate-500 mt-1 text-lg">{finalData.level}</p>
           </div>
 
-          <div className="grid lg:grid-cols-3 gap-6 bg-white p-8 rounded-3xl shadow-xl border border-slate-100 items-stretch mb-8">
-            <div className="lg:col-span-2 bg-slate-50 p-4 rounded-3xl border border-slate-200 flex flex-col justify-center">
-              <h3 className="text-center text-xl font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Análise por Domínio (CHA)</h3>
+          <div className="mb-8 grid grid-cols-1 items-stretch gap-4 rounded-2xl border border-slate-100 bg-white p-3 shadow-xl sm:gap-6 sm:p-6 lg:grid-cols-[minmax(0,1.65fr)_minmax(300px,1fr)] lg:rounded-3xl lg:p-8">
+            <div className="flex min-w-0 flex-col justify-center rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:p-4">
+              <h3 className="mb-4 text-center text-xs font-black uppercase text-slate-500 sm:text-lg sm:tracking-widest">Análise por Domínio (CHA)</h3>
               <div className="flex-1 flex items-center justify-center">
                 <MultiLayerRadarChart data={finalData} />
               </div>
             </div>
             
-            <div className="lg:col-span-1 flex flex-col gap-6">
-              <div className="bg-slate-900 text-white p-6 rounded-3xl shadow-lg relative overflow-hidden group">
-                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                   <Zap className="w-24 h-24" />
-                </div>
-                <h3 className="text-indigo-400 text-xs font-black uppercase tracking-widest mb-1">Desempenho Geral</h3>
-                <p className="text-5xl font-black">{Math.round(finalData.total)}%</p>
-                <div className="mt-4 h-3 w-full bg-white/10 rounded-full overflow-hidden">
-                  <div className="h-full bg-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.5)]" style={{ width: `${finalData.total}%` }}></div>
-                </div>
-              </div>
-
-              <div className="bg-white border-2 border-slate-50 p-6 rounded-3xl shadow-md flex-1 flex flex-col items-center justify-center">
-                 <h3 className="text-slate-400 text-xs font-black uppercase tracking-widest mb-6 text-center">Equilíbrio do CHA</h3>
+            <div className="flex min-w-0 flex-col">
+              <div className="flex flex-1 flex-col items-center justify-center rounded-2xl border-2 border-slate-50 bg-white p-4 shadow-md sm:rounded-3xl sm:p-6">
+                 <h3 className="mb-5 text-center text-xs font-black uppercase tracking-widest text-slate-500">Equilíbrio do CHA</h3>
                  <ProportionalVenn data={finalData} />
-                 
-                 <div className="grid grid-cols-3 gap-2 w-full mt-4">
-                   <div className="text-center">
-                     <span className="block text-[10px] font-black text-blue-400 uppercase">Conhec.</span>
-                     <span className="text-xl font-black text-blue-600">{Math.round(finalData.cha.conhecimentos)}%</span>
-                   </div>
-                   <div className="text-center">
-                     <span className="block text-[9px] font-black text-emerald-400 uppercase">Habilid.</span>
-                     <span className="text-xl font-black text-emerald-600">{Math.round(finalData.cha.habilidades)}%</span>
-                   </div>
-                   <div className="text-center">
-                     <span className="block text-[9px] font-black text-rose-400 uppercase">Atitudes</span>
-                     <span className="text-xl font-black text-rose-600">{Math.round(finalData.cha.atitudes)}%</span>
-                   </div>
-                 </div>
               </div>
             </div>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-6 mb-8">
-              <div className="bg-emerald-50 border border-emerald-100 p-6 rounded-2xl shadow-sm">
-                  <div className="flex items-center gap-2 mb-4 text-emerald-600">
+            <div className="mb-8 grid grid-cols-1 gap-4 sm:gap-5">
+              <div className="min-w-0 rounded-2xl border border-emerald-100 bg-emerald-50 p-4 shadow-sm sm:p-6">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                <div className="flex shrink-0 items-center gap-2 text-emerald-600 sm:w-52">
                       <TrendingUp className="w-5 h-5" />
                       <h4 className="font-black uppercase text-xs tracking-widest">Pontos Fortes</h4>
                   </div>
-                  <div className="space-y-2">
+                <div className="flex min-w-0 flex-1 flex-wrap gap-2">
                       {getStrengths().length > 0 ? getStrengths().map((s, i) => (
-                          <div key={i} className="flex items-start gap-2 text-emerald-800 text-xs font-bold bg-emerald-100/50 p-2.5 rounded-xl border border-emerald-200">
+                    <div key={i} className="flex min-w-[180px] flex-1 items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-100/50 p-2.5 text-xs font-bold text-emerald-800">
                               <Star className="w-3.5 h-3.5 text-emerald-500 mt-0.5 fill-emerald-500 flex-shrink-0" />
                               {s}
                           </div>
                       )) : <p className="text-emerald-800 text-xs italic">Foque no CHA para descobrir seus potenciais latentes.</p>}
                   </div>
+                </div>
               </div>
 
-              <div className="bg-rose-50 border border-rose-100 p-6 rounded-2xl shadow-sm">
-                  <div className="flex items-center gap-2 mb-4 text-rose-600">
+              <div className="min-w-0 rounded-2xl border border-rose-100 bg-rose-50 p-4 shadow-sm sm:p-6">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                <div className="flex shrink-0 items-center gap-2 text-rose-600 sm:w-52">
                       <TrendingDown className="w-5 h-5" />
                       <h4 className="font-black uppercase text-xs tracking-widest">Pontos Fracos</h4>
                   </div>
-                  <div className="space-y-2">
+                <div className="flex min-w-0 flex-1 flex-wrap gap-2">
                       {getWeaknesses().length > 0 ? getWeaknesses().map((w, i) => (
-                          <div key={i} className="flex items-start gap-2 text-rose-800 text-xs font-bold bg-rose-100/50 p-2.5 rounded-xl border border-rose-200">
+                    <div key={i} className="flex min-w-[180px] flex-1 items-start gap-2 rounded-xl border border-rose-200 bg-rose-100/50 p-2.5 text-xs font-bold text-rose-800">
                               <Info className="w-3.5 h-3.5 text-rose-500 mt-0.5 flex-shrink-0" />
                               {w}
                           </div>
                       )) : <p className="text-rose-800 text-xs italic">Excelente equilíbrio! Nenhum ponto crítico identificado.</p>}
                   </div>
+                </div>
               </div>
 
-              <div className="bg-amber-50 border border-amber-100 p-6 rounded-2xl shadow-sm">
-                  <div className="flex items-center gap-2 mb-4 text-amber-600">
+              <div className="min-w-0 rounded-2xl border border-amber-100 bg-amber-50 p-4 shadow-sm sm:p-6 md:col-span-2 xl:col-span-1">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                <div className="flex shrink-0 items-center gap-2 text-amber-600 sm:w-52">
                       <Lightbulb className="w-5 h-5" />
                       <h4 className="font-black uppercase text-xs tracking-widest">Sugestões</h4>
                   </div>
-                  <div className="space-y-4">
+                <div className="grid min-w-0 flex-1 grid-cols-1 gap-4 xl:grid-cols-2">
                       {getTrainingAdvice().map((a, i) => (
-                          <div key={i} className="space-y-1.5">
+                    <div key={i} className="min-w-0 space-y-1.5 rounded-xl border border-amber-200 bg-amber-100/40 p-3">
                               <span className="text-[9px] font-black text-amber-600 uppercase bg-amber-200/50 px-2 py-0.5 rounded border border-amber-200 inline-block mb-1">{a.area}</span>
-                              <p className="text-amber-900 text-[11px] leading-tight font-bold">{a.advice.strategy}</p>
+                              <p className="break-words text-xs font-medium leading-relaxed text-amber-900">{a.strategy}</p>
                           </div>
                       ))}
                   </div>
+                </div>
               </div>
           </div>
 
-          <div className="bg-slate-100 p-8 rounded-2xl text-slate-800 border border-slate-200">
-            <div className="flex items-start gap-4">
+          <div className="rounded-2xl border border-slate-200 bg-slate-100 p-4 text-slate-800 sm:p-8">
+            <div className="flex min-w-0 items-start gap-3 sm:gap-4">
               <div className="p-3 bg-white rounded-xl shadow-sm border border-slate-200">
                 <Info className="w-6 h-6 text-indigo-500" />
               </div>
               <div>
-                <h4 className="text-lg font-black mb-2">Interpretação e Plano Estratégico</h4>
+                <h4 className="mb-2 text-base font-black sm:text-lg">Interpretação e Plano Estratégico</h4>
                 <p className="text-slate-600 leading-relaxed text-sm">
                   Seu perfil como <strong>{finalData.level}</strong> indica uma integração de CHA que {finalData.total > 60 ? 'sustenta uma prática pedagógica inovadora' : 'está em fase de expansão exploratória'}. 
                   O foco imediato deve ser {finalData.cha.conhecimentos > finalData.cha.habilidades ? 'transformar seus conhecimentos teóricos em habilidades práticas de sala' : 'aprofundar a base conceitual para dar suporte às suas habilidades operacionais'}. 

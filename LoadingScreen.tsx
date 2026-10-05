@@ -1,5 +1,6 @@
 import React from 'react';
 import { BrainCircuit, FlaskConical, BookOpen } from 'lucide-react';
+import loadingVideo from './src/assets/loading.mp4';
 
 const dicas = [
   {
@@ -28,21 +29,25 @@ const LoadingScreen: React.FC = () => {
   }, []);
 
   return (
-    <div className="flex flex-col items-center justify-center h-screen bg-slate-50 text-center p-4">
-      <div className="max-w-lg">
-        {/* O caminho para o GIF é relativo à pasta 'public' */}
-        <img 
-          src="assets/giphy (1)" 
-          alt="Cérebro de IA processando informações" 
-          className="w-64 h-64 mx-auto mb-8 rounded-full shadow-2xl"
+    <div className="flex min-h-[55vh] flex-col items-center justify-center bg-slate-50 p-4 text-center">
+      <div className="w-full max-w-lg">
+        <video
+          src={loadingVideo}
+          autoPlay
+          loop
+          muted
+          playsInline
+          preload="metadata"
+          aria-label="Animação de carregamento"
+          className="mx-auto mb-5 h-48 w-full max-w-sm rounded-xl object-contain sm:mb-8 sm:h-64"
         />
-        <h1 className="text-3xl font-black text-slate-800 tracking-tight mb-4">
+        <h1 className="mb-4 text-2xl font-black tracking-tight text-slate-800 sm:text-3xl">
           Aguarde um momento...
         </h1>
-        <div className="h-16 flex items-center justify-center">
-          <div key={dicaAtual} className="flex items-center gap-3 text-indigo-600 animate-in fade-in duration-500">
+        <div className="flex min-h-16 items-center justify-center">
+          <div key={dicaAtual} className="flex items-center justify-center gap-3 text-indigo-600 animate-in fade-in duration-500">
             {dicas[dicaAtual].icone}
-            <p className="text-lg font-medium">{dicas[dicaAtual].texto}</p>
+            <p className="text-base font-medium sm:text-lg">{dicas[dicaAtual].texto}</p>
           </div>
         </div>
       </div>

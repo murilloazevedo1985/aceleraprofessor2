@@ -56,14 +56,14 @@ export default function App({ onVoltar }: CompetenceAssessmentProps) {
         
         {/* TELA INICIAL */}
         {currentMenu === 'home' && (
-          <div className="flex flex-col items-center justify-center p-8 w-full min-h-[calc(100vh-80px)]">
+          <div className="flex min-h-[calc(100vh-80px)] w-full flex-col items-center justify-center p-4 sm:p-8">
             
             
 
-            <div className="grid md:grid-cols-3 gap-8 max-w-5xl w-full">
+            <div className="grid w-full max-w-5xl grid-cols-1 gap-4 sm:grid-cols-2 md:gap-8 lg:grid-cols-3">
               
               {/* Card 1: Competência */}
-              <div className="bg-white p-8 rounded-[1.5rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-lg transition-all border border-slate-100 flex flex-col">
+              <div className="flex flex-col rounded-[1.5rem] border border-slate-100 bg-white p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] transition-all hover:shadow-lg sm:p-8">
                 <div className="w-12 h-12 bg-slate-50 text-slate-700 rounded-2xl flex items-center justify-center mb-6 border border-slate-100">
                   <ShieldCheck className="w-6 h-6" />
                 </div>
@@ -80,7 +80,7 @@ export default function App({ onVoltar }: CompetenceAssessmentProps) {
               </div>
 
               {/* Card 2: Estratégias */}
-              <div className="bg-white p-8 rounded-[1.5rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-lg transition-all border border-slate-100 flex flex-col">
+              <div className="flex flex-col rounded-[1.5rem] border border-slate-100 bg-white p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] transition-all hover:shadow-lg sm:p-8">
                 <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mb-6 border border-indigo-100">
                   <BookOpen className="w-6 h-6" />
                 </div>
@@ -97,7 +97,7 @@ export default function App({ onVoltar }: CompetenceAssessmentProps) {
               </div>
 
               {/* Card 3: Exercícios */}
-              <div className="bg-white p-8 rounded-[1.5rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-lg transition-all border border-slate-100 flex flex-col">
+              <div className="flex flex-col rounded-[1.5rem] border border-slate-100 bg-white p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] transition-all hover:shadow-lg sm:p-8">
                 <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mb-6 border border-emerald-100">
                   <ListChecks className="w-6 h-6" />
                 </div>

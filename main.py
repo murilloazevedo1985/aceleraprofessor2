@@ -11,6 +11,7 @@ import firebase_admin
 from firebase_admin import credentials as firebase_credentials, firestore
 import re
 import os
+from urllib.parse import urlparse
 from dotenv import load_dotenv
 from googlesearch import search
 from pinecone import Pinecone
@@ -516,6 +517,27 @@ async def gerar_experimento_estrategico(dados: ExperimentoRequest):
         print(f"❌ Erro ao gerar experimento estratégico: {e}")
         raise HTTPException(status_code=500, detail="Erro interno ao processar a solicitação.")
 
+_COMANDOS_LATEX_COM_ESCAPE_JSON = (
+    "bar", "begin", "beta", "bf", "binom", "bold", "boldsymbol",
+    "fbox", "flat", "forall", "frac", "frak",
+    "nabla", "neg", "neq", "newcommand", "nexists", "not", "nu",
+    "Re", "rangle", "rbrace", "rceil", "rfloor", "rho", "right",
+    "rightarrow", "rm", "root", "rvert",
+    "tau", "tbinom", "tensor", "text", "textbf", "textit", "textrm",
+    "textstyle", "texttt", "theta", "therefore", "thickapprox", "thicksim",
+    "thinspace", "tilde", "times", "to", "top", "tfrac", "triangle",
+    "triangleq", "turnstile",
+)
+
+
+def _parsear_json_com_latex(texto: str) -> dict | list:
+    comandos = "|".join(sorted(_COMANDOS_LATEX_COM_ESCAPE_JSON, key=len, reverse=True))
+    padrao_comandos = rf'(?<!\\)\\({comandos})\b'
+    texto = re.sub(padrao_comandos, lambda match: "\\\\" + match.group(1), texto)
+    texto = re.sub(r'(?<!\\)\\(?![/bfnrt"\\])', r'\\\\', texto)
+    return json.loads(texto)
+
+
 @app.post("/gerar-plano")
 async def gerar_plano(dados: PlanoRequest):
     try:
@@ -853,15 +875,7 @@ async def gerar_plano(dados: PlanoRequest):
             },
         )
         
-        # --- CORREÇÃO CIRÚRGICA PARA LATEX ---
-        # A resposta da IA (resposta.text) é uma string JSON. Fórmulas LaTeX (ex: "\frac")
-        # podem conter sequências como `\f` que são interpretadas como caracteres de escape
-        # inválidos pelo `json.loads`. A solução é usar uma expressão regular para (raw string)
-        # encontrar e escapar apenas as barras invertidas que não fazem parte de uma
-        # sequência de escape JSON válida (como \n, \t, \", \\).
-        # Isso preserva a integridade das fórmulas LaTeX.
-        processed_text = re.sub(r'(?<!\\)\\(?![/bfnrt"\\])', r'\\\\', resposta.text)
-        plano_json = json.loads(processed_text)
+        plano_json = _parsear_json_com_latex(resposta.text)
         
         # --- CORREÇÃO DO BUG (A trava de segurança) ---
         if isinstance(plano_json, list):
@@ -920,24 +934,29 @@ async def buscar_e_anexar_link_simulacao(plano_json: dict):
     texto_analise = (titulo_sim + " " + termo_busca).lower()
     
     sites_vip = {
-        "walter fendt": ("walter-fendt.de", "https://www.walter-fendt.de/html5/phbr/"),
-        "phet": ("phet.colorado.edu", "https://phet.colorado.edu/pt_BR/simulations/filter?type=html5"),
-        "vascak": ("vascak.cz", "https://www.vascak.cz/physicsanimations.php?l=pt"),
-        "simufisica": ("simufisica.com", "https://simufisica.com/"),
-        "falstad": ("falstad.com", "https://falstad.com/mathphysics.html"),
-        "lemans": ("univ-lemans.fr", "http://ressources.univ-lemans.fr/AccesLibre/UM/Pedago/physique/02/index.html"),
-        "ck-12": ("interactives.ck12.org", "https://interactives.ck12.org/simulations/physics.html"),
-        "classroom": ("physicsclassroom.com", "https://www.physicsclassroom.com/interactive-physics"),
+        "walter fendt": "walter-fendt.de",
+        "phet": "phet.colorado.edu",
+        "vascak": "vascak.cz",
+        "simufisica": "simufisica.com",
+        "falstad": "falstad.com",
+        "lemans": "univ-lemans.fr",
+        "ck-12": "interactives.ck12.org",
+        "classroom": "physicsclassroom.com",
     }
 
-    dominio_alvo, link_fallback = None, "https://phet.colorado.edu/pt_BR/"
+    dominio_alvo = None
 
-    for keyword, (domain, fallback) in sites_vip.items():
+    for keyword, domain in sites_vip.items():
         if keyword in texto_analise:
-            dominio_alvo, link_fallback = domain, fallback
+            dominio_alvo = domain
             break
 
-    query_sim = f"site:{dominio_alvo} {termo_busca}" if dominio_alvo else f"{termo_busca} simulação física"
+    consulta_simulacao = " ".join(filter(None, (titulo_sim, termo_busca)))
+    query_sim = (
+        f"site:{dominio_alvo} {consulta_simulacao}"
+        if dominio_alvo
+        else f"{consulta_simulacao} simulação física"
+    )
     print(f"🔎 Varrendo '{dominio_alvo or 'Web'}' atrás de: '{termo_busca}'")
 
     link_final = None
@@ -946,19 +965,31 @@ async def buscar_e_anexar_link_simulacao(plano_json: dict):
         ddgs = DDGS()
         # A versão atual do pacote removeu o método assíncrono atext.
         # Usamos run_in_threadpool para não bloquear o event loop.
-        resultados_sim = await run_in_threadpool(ddgs.text, query_sim, max_results=1)
+        resultados_sim = await run_in_threadpool(ddgs.text, query_sim, max_results=5)
         
-        if resultados_sim:
-            link_final = resultados_sim[0].get('href')
+        for resultado in resultados_sim or []:
+            href = (resultado.get('href') or '').strip()
+            if not href.startswith(('https://', 'http://')):
+                continue
+
+            host_resultado = (urlparse(href).hostname or '').lower()
+            if dominio_alvo and not (
+                host_resultado == dominio_alvo
+                or host_resultado.endswith(f'.{dominio_alvo}')
+            ):
+                print(f"   - Resultado ignorado por não pertencer a {dominio_alvo}: {href}")
+                continue
+
+            link_final = href
             print(f"🌟 LINK DIRETO EXTRAÍDO: {link_final}")
+            break
     except Exception as e:
         print(f"⚠️ DuckDuckGo recusou a conexão ou deu timeout: {e}")
 
     if not link_final:
-        print("🔄 Usando link de fallback do diretório VIP.")
-        link_final = link_fallback
+        print("⚠️ Nenhum link direto de simulação foi encontrado.")
 
-    plano_json["simulacaoSugerida"]["url"] = link_final
+    plano_json["simulacaoSugerida"]["url"] = link_final or ""
 
 @app.post("/avaliar-estrategia")
 async def avaliar_estrategia(dados: AvaliacaoRequest):
